@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PharmaTrust - Pharmacy Inventory & Brand Matcher</title>
+    <meta name="description" content="Pharmacy inventory management system with expiry-date shelf locator and customer trust interface for chemical substitute brands." />
+    <meta property="og:title" content="PharmaTrust - Pharmacy Inventory & Brand Matcher" />
+    <meta property="og:description" content="Pharmacy inventory management system with expiry-date shelf locator and customer trust interface for chemical substitute brands." />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-wrapper app-professional-theme">
+      <!-- Professional Polish Deep Blue Top Header -->
+      <header class="top-header professional-header" id="appHeader">
+        <div class="brand-section">
+          <div class="brand-icon-box" id="brandIcon">
+            <svg class="header-pill-svg" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 2a1 1 0 00-1 1v1H8a1 1 0 00-1 1v2a1 1 0 001 1v1h1v1H8a1 1 0 00-1 1v2a1 1 0 001 1v1h1v1a1 1 0 102 0v-1h1v-1a1 1 0 001-1v-2a1 1 0 00-1-1h-1V9h1V8a1 1 0 001-1V5a1 1 0 00-1-1h-1V3a1 1 0 00-1-1z"></path>
+            </svg>
+          </div>
+          <div class="brand-titles">
+            <h1>PharmaTrust <span class="header-subtitle-tag">Inventory &amp; Trust Manager</span></h1>
+          </div>
+        </div>
+
+        <!-- Store Branch Selector (Option 3: Multi-Pharmacy Multi-Store Switcher) -->
+        <div class="branch-switcher-wrapper" id="branchSwitcherWrapper">
+          <label for="storeBranchSelect" class="branch-select-label" title="Switch Pharmacy Dispensary Branch">
+            <span class="branch-icon">&#127973;</span>
+            <span class="branch-label-text">Branch:</span>
+          </label>
+          <div class="branch-select-container">
+            <select id="storeBranchSelect" class="branch-dropdown" aria-label="Select Pharmacy Branch">
+              <option value="avinashi_main" selected>Nila Medicals - Avinashi Main</option>
+              <option value="branch_2_railway">Nila Medicals - Branch 2 (Railway Feeder)</option>
+              <option value="tirupur_hub">Nila Medicals - Tirupur Town Hub</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Mode Switch Tabs & Terminal Status -->
+        <div class="header-right-controls">
+          <nav class="view-tabs" aria-label="Application views">
+            <button id="tabDashboard" class="tab-btn active" type="button">
+              <span>&#128203;</span> Pharmacist Dashboard
+            </button>
+            <button id="tabTrust" class="tab-btn" type="button">
+              <span>&#129309;</span> Customer Trust Screen
+            </button>
+            <button id="tabSplit" class="tab-btn" type="button">
+              <span>&#9974;</span> Split Counter View
+            </button>
+          </nav>
+
+          <div class="terminal-badge-wrapper">
+            <span class="terminal-badge" id="activeTerminalBadge">Terminal: Avinashi-Counter-01</span>
+            <button type="button" id="headerAuditLogBtn" class="header-action-btn" title="View Dispensary Dispensing & Intake Audit Log">
+              <span>&#128220;</span> Audit Log <span id="headerAuditBadge" class="header-count-bubble">0</span>
+            </button>
+            <button type="button" id="headerAudioToggleBtn" class="header-action-btn" title="Toggle Dispensary Sound Effects">
+              <span id="audioToggleIcon">&#128266;</span> Sound
+            </button>
+            <div class="pharmacist-avatar" title="Authenticated Pharmacist on Duty">
+              <img src="https://images.unsplash.com/photo-1559839734-2b71f1536783?auto=format&fit=crop&q=80&w=100" alt="Pharmacist" />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Problem Context Banner: Dual Challenges Solved -->
+      <section class="problem-context-banner" id="problemBanner" aria-label="System purpose">
+        <div class="context-card problem-1" id="contextProblem1">
+          <div class="context-icon">&#128300;</div>
+          <div class="context-text">
+            <h3>Issue 1: Overcoming Brand Substitute Rejection</h3>
+            <p>Customers often reject identical generic/substitute brands out of brand skepticism. Our <strong>Trust Matcher</strong> visualizes 100% active chemical equivalence on a patient-facing screen.</p>
+          </div>
+        </div>
+        <div class="context-card problem-2" id="contextProblem2">
+          <div class="context-icon">&#9200;</div>
+          <div class="context-text">
+            <h3>Issue 2: Instant Expiry Date &amp; Shelf Localization</h3>
+            <p>Stop manually sorting shelves. Batches expiring in <strong>3-4 months</strong> are flagged in amber, while <strong>8-10+ month</strong> fresh batches demanded by customers are highlighted in green with exact shelf locations.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- MAIN CONTENT CONTAINER -->
+      <main>
+        <!-- ==========================================================================
+             PART 2: PHARMACIST DASHBOARD INTERFACE
+             ========================================================================== -->
+        <section id="dashboardPanel" class="dashboard-panel" aria-label="Pharmacist Dashboard">
+          <!-- Option 1: Automated Expiry Alert / Notification System (<30 Days Critical Warning) -->
+          <div id="urgentExpiryAlertBanner" class="urgent-expiry-banner" style="display: none;" role="alert" aria-live="assertive">
+            <div class="urgent-banner-inner">
+              <div class="urgent-icon-bubble">
+                <span class="urgent-flashing-icon">&#128680;</span>
+              </div>
+              <div class="urgent-banner-text-block">
+                <div class="urgent-heading-row">
+                  <span class="urgent-critical-tag">CRITICAL &lt;30 DAYS EXPIRY</span>
+                  <h4 id="urgentBannerTitle">Automated Alert: 2 batches approaching expiry deadline!</h4>
+                </div>
+                <p id="urgentBannerDescription">
+                  These medicines are expiring in less than 30 days. Priority First-Expiry-First-Out (FEFO) dispensing is required to prevent inventory write-offs.
+                </p>
+                <div class="urgent-batches-chips" id="urgentBatchesChips">
+                  <!-- Dynamic batch chips inserted here -->
+                </div>
+              </div>
+              <div class="urgent-banner-actions">
+                <button type="button" id="btnSortUrgentFEFO" class="urgent-btn primary" title="Sort critical items to the very top">
+                  <span>&#9889;</span> Auto-Sort to Top (FEFO)
+                </button>
+                <button type="button" id="btnDismissUrgentBanner" class="urgent-btn dismiss" title="Acknowledge and dismiss banner">
+                  &times; Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="search-toolbar" id="searchToolbar">
+            <!-- Search Bar, Simulated Scan, and Camera QR Scanner Actions -->
+            <div class="search-row-main">
+              <div class="search-input-wrapper">
+                <span class="search-icon-symbol" aria-hidden="true">&#128269;</span>
+                <input
+                  type="text"
+                  id="medicineSearchInput"
+                  class="search-input"
+                  placeholder="Search by Medicine Name, Brand, Active Molecule, or Barcode..."
+                  autocomplete="off"
+                />
+                <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" type="button">
+                  &times;
+                </button>
+              </div>
+
+              <!-- Option 2: Simulated Barcode / QR Code Scanner Button -->
+              <button id="openSimulatedScanBtn" class="scanner-trigger-btn simulated-scanner-btn" type="button" title="Simulate handheld retail packaging scanner">
+                <span class="scanner-flash-icon">&#9889;</span>
+                <span>Scan Barcode (Simulated)</span>
+              </button>
+
+              <!-- Camera QR & Barcode Scanner Button -->
+              <button id="openScannerBtn" class="scanner-trigger-btn camera-scanner-btn" type="button" title="Scan packaging barcode or QR code with device camera">
+                <svg class="scanner-btn-svg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                <span>Live Camera</span>
+              </button>
+
+              <!-- Essential Operations Action Strip -->
+              <div class="essential-operations-btn-group">
+                <button id="openInwardStockBtn" class="op-action-btn primary-inward" type="button" title="Record incoming shipment batch to shelf">
+                  <span>&#10010;</span> Inward Stock Intake
+                </button>
+                <button id="openPurchaseOrderBtn" class="op-action-btn secondary-po" type="button" title="Compile Low Stock & Expiry items into Supplier Purchase Order">
+                  <span>&#128221;</span> Supplier Restock PO <span id="toolbarPoBadge" class="op-badge-counter">0</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Filter Controls & Search Suggestions -->
+            <div class="toolbar-controls">
+              <!-- Quick Chips -->
+              <div class="quick-chips-group">
+                <span class="chips-label">Quick Search:</span>
+                <button type="button" class="quick-chip" data-term="Paracetamol">Paracetamol</button>
+                <button type="button" class="quick-chip" data-term="Atorvastatin">Atorvastatin</button>
+                <button type="button" class="quick-chip" data-term="Amoxicillin">Amoxicillin</button>
+                <button type="button" class="quick-chip" data-term="Metformin">Metformin</button>
+              </div>
+
+              <!-- Expiry Filters & Sort Options -->
+              <div class="expiry-filter-group">
+                <button type="button" class="filter-pill-btn active" data-filter="all" id="filterAllBtn">
+                  All Batches
+                </button>
+                <button type="button" class="filter-pill-btn filter-critical" data-filter="critical" id="filterCriticalBtn">
+                  &#128680; &lt;30d Critical <span id="criticalCountBadge" class="badge-counter"></span>
+                </button>
+                <button type="button" class="filter-pill-btn filter-warning" data-filter="warning" id="filterWarningBtn">
+                  &#9888;&#65039; 3-4 Mo Warning <span id="warningCountBadge" class="badge-counter"></span>
+                </button>
+                <button type="button" class="filter-pill-btn filter-safe" data-filter="safe" id="filterSafeBtn">
+                  &#9989; 8-10+ Mo Fresh <span id="safeCountBadge" class="badge-counter"></span>
+                </button>
+                <button type="button" class="filter-pill-btn filter-low-stock" data-filter="low_stock" id="filterLowStockBtn">
+                  &#9888;&#65039; &lt;5 Units Low Stock <span id="lowStockCountBadge" class="badge-counter"></span>
+                </button>
+                <button type="button" class="filter-pill-btn" id="sortToggleBtn" title="Toggle sorting order">
+                  Sort: <strong>Nearest Expiry First &#8593;</strong>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ==========================================================================
+               D3.JS INVENTORY EXPIRY DISTRIBUTION & BULK PURCHASING INTELLIGENCE
+               ========================================================================== -->
+          <section class="analytics-card" id="expiryAnalyticsCard" aria-label="Inventory Expiry Distribution & Bulk Purchasing Guide">
+            <div class="analytics-card-header">
+              <div class="analytics-header-titles">
+                <div class="analytics-badge-title">
+                  <span class="d3-chart-icon" aria-hidden="true">&#128202;</span>
+                  <h3>Inventory Expiry Distribution &amp; Bulk Purchasing Guide</h3>
+                  <span class="d3-badge">D3.js Live Analytics</span>
+                </div>
+                <p class="analytics-subtitle">
+                  Visualizes upcoming shelf-life horizons across all inventory batches to guide supplier bulk Purchase Orders (POs) and prevent expiry write-offs.
+                </p>
+              </div>
+
+              <div class="analytics-header-actions">
+                <!-- Toggle Metric: Stock Units vs Batch Count -->
+                <div class="chart-metric-toggle" role="group" aria-label="Chart metric toggle">
+                  <button type="button" class="btn-metric-toggle active" id="toggleUnitsMetric" data-metric="units">
+                    Total Units
+                  </button>
+                  <button type="button" class="btn-metric-toggle" id="toggleBatchesMetric" data-metric="batches">
+                    Batch Count
+                  </button>
+                </div>
+                <!-- Reset Chart Filter Button -->
+                <button type="button" class="btn-chart-reset" id="resetChartFilterBtn" style="display: none;">
+                  &#10005; Reset Chart Filter
+                </button>
+              </div>
+            </div>
+
+            <!-- Bulk Procurement Decision KPIs -->
+            <div class="procurement-kpis-strip" id="procurementKpisStrip">
+              <!-- Populated dynamically by app.js -->
+            </div>
+
+            <!-- D3 Interactive Chart Canvas -->
+            <div class="d3-chart-wrapper" id="d3ChartWrapper">
+              <div class="d3-chart-canvas" id="d3ExpiryChart"></div>
+              <div class="d3-tooltip" id="d3ChartTooltip" style="opacity: 0; pointer-events: none;"></div>
+            </div>
+
+            <!-- Chart Expiry Zones Legend & Action Guide -->
+            <div class="chart-footer-guide">
+              <div class="chart-zones-legend">
+                <button type="button" class="zone-legend-item" data-filter-range="3-4" title="Filter to 3-4 month batches">
+                  <span class="zone-color-indicator critical"></span>
+                  <span><strong>3–4 Mo (Critical Risk):</strong> Trigger Bulk Reorder &bull; Prioritize FEFO</span>
+                </button>
+                <button type="button" class="zone-legend-item" data-filter-range="5-7" title="Filter to 5-7 month batches">
+                  <span class="zone-color-indicator transition"></span>
+                  <span><strong>5–7 Mo (Moderate):</strong> Standard Runway &bull; Prepare Quotations</span>
+                </button>
+                <button type="button" class="zone-legend-item" data-filter-range="8-11" title="Filter to 8-11 month batches">
+                  <span class="zone-color-indicator target"></span>
+                  <span><strong>8–11 Mo (Customer Target):</strong> High Patient Demand &bull; Maintain Orders</span>
+                </button>
+                <button type="button" class="zone-legend-item" data-filter-range="12-24" title="Filter to 12+ month batches">
+                  <span class="zone-color-indicator extended"></span>
+                  <span><strong>12+ Mo (Long Buffer):</strong> Defer Bulk POs &bull; Prevent Capital Lockup</span>
+                </button>
+              </div>
+              <div class="chart-hint-note">
+                <span class="hint-icon">&#128161;</span> <em>Hover bars for purchasing recommendations. Click any bar or zone to filter inventory batches below.</em>
+              </div>
+            </div>
+          </section>
+
+          <!-- Table Header Legend & Stats -->
+          <div class="table-header-meta">
+            <span id="resultSummaryText" class="result-summary-text">
+              Loading inventory batches...
+            </span>
+
+            <div class="expiry-legend">
+              <div class="legend-item">
+                <span class="legend-dot warning"></span>
+                <span><strong>3-4 Months:</strong> Short Expiry (Warning)</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-dot safe"></span>
+                <span><strong>8-10+ Months:</strong> Customer Demanded (Fresh)</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-dot low-stock"></span>
+                <span><strong>&lt;5 Units:</strong> Low Stock (Restock Alert)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Inventory Results Table -->
+          <div class="table-card" id="tableCard">
+            <div class="table-responsive">
+              <table class="inventory-table" id="inventoryTable">
+                <thead>
+                  <tr>
+                    <th scope="col">Brand &amp; Medicine Details</th>
+                    <th scope="col">Expiry Date (Months)</th>
+                    <th scope="col">Physical Shelf Location</th>
+                    <th scope="col">Stock Quantity</th>
+                    <th scope="col">Dispensary &amp; Trust Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                  <!-- Dynamically populated by app.js -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==========================================================================
+             PART 3: THE CUSTOMER TRUST INTERFACE (PATIENT FACING)
+             ========================================================================== -->
+        <section id="trustPanel" class="trust-panel" style="display: none;" aria-label="Customer Trust Interface">
+          <!-- Customer Trust Banner -->
+          <div class="trust-customer-banner" id="trustBanner">
+            <div class="banner-content">
+              <h2>Official Pharmaceutical Bioequivalence Verification</h2>
+              <p>Certified clinical proof that generic and substitute brands contain 100% identical active therapeutic ingredients with the exact same clinical effectiveness.</p>
+            </div>
+            <div class="banner-badge">
+              &#128737;&#65039; Medical Authority Verified
+            </div>
+          </div>
+
+          <!-- Interactive Brand Selectors for Live Trust Demonstration -->
+          <div class="trust-controls-bar" id="trustControlsBar">
+            <div class="trust-controls-top-row">
+              <span class="compare-instruction-title">&#128269; Compare Any Two Medicines Element-by-Element:</span>
+              <div class="compare-presets-group" id="comparePresetsGroup">
+                <span class="presets-label">Quick Presets:</span>
+                <button type="button" class="btn-preset-chip" data-req="7" data-sub="8">Lipitor vs Atorva (Statin)</button>
+                <button type="button" class="btn-preset-chip" data-req="1" data-sub="2">Crocin vs Calpol (Paracetamol)</button>
+                <button type="button" class="btn-preset-chip" data-req="4" data-sub="6">Augmentin vs Clavam (Antibiotic)</button>
+                <button type="button" class="btn-preset-chip diff" data-req="1" data-sub="4">Crocin vs Augmentin (Different)</button>
+                <button type="button" class="btn-preset-chip diff" data-req="7" data-sub="10">Lipitor vs Glucophage (Different)</button>
+              </div>
+              <div class="trust-top-actions">
+                <button type="button" id="openTrustCertificateBtn" class="btn-trust-slip-action" title="Generate Official Patient Bioequivalence Certificate & Trust Receipt">
+                  <span>&#128438;&#65039;</span> Patient Trust Certificate
+                </button>
+              </div>
+            </div>
+
+            <div class="trust-selectors-grid">
+              <div class="selector-box">
+                <label for="requestedBrandSelect">Medicine A (Reference / Requested Brand)</label>
+                <select id="requestedBrandSelect" class="custom-select">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+
+              <div class="comparison-center-tools">
+                <button type="button" id="btnSwapMedicines" class="btn-swap-medicines" title="Swap Medicine A and Medicine B">
+                  &#8644; Swap
+                </button>
+                <span class="comparison-vs-badge" aria-hidden="true">VS</span>
+              </div>
+
+              <div class="selector-box">
+                <label for="substituteBrandSelect">Medicine B (Comparison / Substitute Brand)</label>
+                <select id="substituteBrandSelect" class="custom-select">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Primary Verification Card (Populated by JavaScript Trust Matcher) -->
+          <div class="trust-verification-card" id="trustVerificationResult">
+            <!-- Dynamic output from runTrustMatcher() in app.js -->
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Quick Modal for Instant Row Comparison (Optional Overlay) -->
+    <div id="comparisonModal" class="modal-overlay" aria-hidden="true">
+      <div class="modal-content">
+        <button id="modalCloseBtn" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+        <div id="modalBody" style="padding: 20px;">
+          <!-- Dynamically cloned comparison card when launched in overlay mode -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera-Based Barcode & QR Code Scanner Modal -->
+    <div id="scannerModal" class="modal-overlay scanner-modal-overlay" aria-hidden="true">
+      <div class="modal-content scanner-modal-card">
+        <div class="scanner-modal-header">
+          <div class="scanner-header-titles">
+            <div class="scanner-title-row">
+              <span class="scanner-icon-chip">&#128247;</span>
+              <h3>Packaging Barcode &amp; QR Scanner</h3>
+            </div>
+            <p>Point device camera at 1D retail barcode (EAN/UPC) or 2D QR code on medicine packaging</p>
+          </div>
+          <button id="closeScannerModalBtn" class="modal-close-btn" type="button" aria-label="Close scanner">&times;</button>
+        </div>
+
+        <div class="scanner-modal-body">
+          <!-- Live Camera Viewport Container -->
+          <div class="camera-viewport-wrap">
+            <div id="qrReader" class="camera-stream-box">
+              <!-- html5-qrcode video element renders here -->
+            </div>
+
+            <!-- Optical Targeting Reticle & Laser Sweep Animation -->
+            <div class="scanner-reticle-overlay" id="scannerReticleOverlay" aria-hidden="true">
+              <div class="reticle-corner top-left"></div>
+              <div class="reticle-corner top-right"></div>
+              <div class="reticle-corner bottom-left"></div>
+              <div class="reticle-corner bottom-right"></div>
+              <div class="laser-scanner-beam"></div>
+            </div>
+
+            <!-- Camera Status Pill -->
+            <div id="scannerStatusPill" class="scanner-status-pill">
+              <span class="status-pulse-dot"></span>
+              <span id="scannerStatusText">Initializing optical camera...</span>
+            </div>
+          </div>
+
+          <!-- Camera Controls Toolbar -->
+          <div class="scanner-controls-toolbar">
+            <div class="camera-select-wrap">
+              <label for="cameraDeviceSelect">&#128249; Camera:</label>
+              <select id="cameraDeviceSelect" class="camera-select-dropdown">
+                <option value="">Default Environment Camera</option>
+              </select>
+            </div>
+            <div class="scanner-btn-group">
+              <button id="toggleTorchBtn" class="scanner-aux-btn" type="button" style="display:none;" title="Toggle Flashlight">
+                &#9889; Torch
+              </button>
+              <button id="toggleCameraStreamBtn" class="scanner-aux-btn" type="button">
+                &#9208;&#65039; Pause Camera
+              </button>
+              <label class="scanner-aux-btn file-upload-label" title="Upload barcode or QR code image">
+                &#128193; Upload Image
+                <input type="file" id="barcodeFileInput" accept="image/*" style="display:none;" />
+              </label>
+            </div>
+          </div>
+
+          <!-- Interactive Test / Simulator Chips -->
+          <div class="demo-scanner-section">
+            <div class="demo-scanner-label">
+              <span>&#9889; Quick Testing (Click sample barcode to simulate physical packaging scan):</span>
+            </div>
+            <div class="demo-barcodes-grid">
+              <button type="button" class="demo-barcode-chip" data-barcode="8901030382073" data-name="Lipitor 20mg">
+                <span class="chip-code">Lipitor 20mg</span>
+                <span class="chip-sub">8901030382073 &bull; 3 Mo Warning</span>
+              </button>
+              <button type="button" class="demo-barcode-chip" data-barcode="8901030382028" data-name="Calpol 500mg">
+                <span class="chip-code">Calpol 500mg</span>
+                <span class="chip-sub">8901030382028 &bull; 9 Mo Fresh</span>
+              </button>
+              <button type="button" class="demo-barcode-chip" data-barcode="8901030382042" data-name="Augmentin 625">
+                <span class="chip-code">Augmentin 625</span>
+                <span class="chip-sub">8901030382042 &bull; 4 Mo Warning</span>
+              </button>
+              <button type="button" class="demo-barcode-chip" data-barcode="8901030382080" data-name="Atorva 20mg">
+                <span class="chip-code">Atorva 20mg</span>
+                <span class="chip-sub">8901030382080 &bull; 10 Mo Fresh</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic Scanned Match Card Container -->
+          <div id="scannedResultCard" class="scanned-result-card" style="display: none;">
+            <!-- Rendered by app.js when code is recognized -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         Option 2: Simulated Barcode / QR Code Scanner Modal
+         ========================================================================== -->
+    <div id="simulatedScannerModal" class="modal-overlay simulated-scanner-overlay" aria-hidden="true">
+      <div class="modal-content simulated-scanner-card">
+        <div class="sim-scanner-header">
+          <div class="sim-header-titles">
+            <div class="sim-title-row">
+              <span class="sim-icon-badge">&#128246;</span>
+              <h3>Simulated Retail Packaging Barcode Scanner</h3>
+            </div>
+            <p>Pharmacist hardware simulation: triggers rapid laser scan, parses SKU, and localizes shelf rack</p>
+          </div>
+          <button id="closeSimulatedScannerBtn" class="modal-close-btn" type="button" aria-label="Close scanner">&times;</button>
+        </div>
+
+        <div class="sim-scanner-body">
+          <!-- Animated Laser Hardware HUD -->
+          <div class="sim-hardware-hud">
+            <div class="hud-top-bar">
+              <span class="hud-status"><span class="hud-dot"></span> OPTICAL SENSOR READY</span>
+              <span class="hud-baud">EAN-13 / GS1 AUTO-DETECT</span>
+            </div>
+
+            <div class="sim-laser-viewport" id="simLaserViewport">
+              <!-- Visual barcode representation -->
+              <div class="sim-barcode-stripes" id="simBarcodeDisplay">
+                <div class="barcode-lines">
+                  <span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <div class="barcode-number" id="simActiveBarcodeNumber">8901030382073</div>
+              </div>
+
+              <!-- Animated red laser scanner beam -->
+              <div class="sim-laser-beam" id="simLaserBeam"></div>
+              
+              <!-- Scan Beep Ripple / Flash Feedback -->
+              <div class="sim-scan-flash" id="simScanFlash"></div>
+            </div>
+
+            <div class="sim-selected-indicator" id="simSelectedIndicator">
+              Target Medicine: <strong>Lipitor 20mg (Pfizer)</strong> &bull; Location: <span class="shelf-tag-highlight">Rack C3 - Shelf 1</span>
+            </div>
+          </div>
+
+          <!-- Select Sample Medicine to Scan -->
+          <div class="sim-selection-section">
+            <span class="sim-selection-label">&#128230; Select medicine package to simulate barcode scan:</span>
+            <div class="sim-sample-medicines-grid" id="simSampleMedicinesGrid">
+              <!-- Dynamic sample medicine buttons populated by JS -->
+            </div>
+          </div>
+
+          <!-- Scan Action Trigger Button -->
+          <div class="sim-actions-footer">
+            <button type="button" id="btnExecuteSimScan" class="sim-trigger-primary-btn">
+              <span class="btn-laser-symbol">&#9889;</span>
+              <span>Trigger Laser Barcode Scan</span>
+            </button>
+            <button type="button" id="btnRandomSimScan" class="sim-trigger-secondary-btn">
+              <span>&#127922;</span> Scan Random Medicine
+            </button>
+          </div>
+
+          <!-- Instant Feedback HUD on scan -->
+          <div id="simScanSuccessHud" class="sim-success-hud" style="display: none;">
+            <div class="hud-success-banner">
+              <span class="hud-success-icon">&#9989;</span>
+              <div>
+                <strong>BARCODE ACQUIRED &amp; SHELF LOCATED</strong>
+                <div id="simSuccessDetails" style="font-size: 0.82rem; color: #166534; margin-top: 2px;">
+                  <!-- Filled by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         FEATURE 1: QUICK DISPENSE & STOCK DEDUCTION MODAL
+         ========================================================================== -->
+    <div id="dispenseModal" class="modal-overlay dispense-modal-overlay" aria-hidden="true">
+      <div class="modal-content dispense-modal-card">
+        <div class="op-modal-header dispense-header">
+          <div class="op-modal-title-row">
+            <span class="op-modal-icon-badge">&#9889;</span>
+            <div>
+              <h3>Dispensary Counter Dispense</h3>
+              <p>Deduct stock units in real-time &bull; Auto-evaluates low stock &lt;5 threshold</p>
+            </div>
+          </div>
+          <button id="closeDispenseModalBtn" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+        </div>
+
+        <div class="dispense-modal-body">
+          <div class="dispense-item-summary-card" id="dispenseItemSummary">
+            <!-- Dynamic medicine summary inserted by JS -->
+          </div>
+
+          <!-- Units to Dispense Selector -->
+          <div class="dispense-form-section">
+            <label class="dispense-form-label" for="dispenseQtyInput">&#128230; Select Units to Dispense:</label>
+            <div class="dispense-qty-stepper">
+              <button type="button" class="stepper-btn" id="btnDispenseDec">&minus;</button>
+              <input type="number" id="dispenseQtyInput" class="stepper-input" min="1" max="999" value="1" />
+              <button type="button" class="stepper-btn" id="btnDispenseInc">&#43;</button>
+            </div>
+
+            <!-- Quick Qty Preset Chips -->
+            <div class="dispense-quick-presets">
+              <button type="button" class="dispense-preset-chip active" data-qty="1">1 Unit</button>
+              <button type="button" class="dispense-preset-chip" data-qty="2">2 Units</button>
+              <button type="button" class="dispense-preset-chip" data-qty="5">5 Units</button>
+              <button type="button" class="dispense-preset-chip" data-qty="10">1 Strip (10)</button>
+              <button type="button" class="dispense-preset-chip" data-qty="20">2 Strips (20)</button>
+            </div>
+          </div>
+
+          <!-- Patient & Prescription Reference (Optional) -->
+          <div class="dispense-form-section">
+            <div class="dispense-fields-row">
+              <div class="dispense-field-group">
+                <label for="dispensePatientName" class="dispense-form-label">Patient Name (Optional):</label>
+                <input type="text" id="dispensePatientName" class="dispense-text-input" placeholder="e.g. Ramesh Kumar" />
+              </div>
+              <div class="dispense-field-group">
+                <label for="dispenseRxRef" class="dispense-form-label">Prescription / Bill # (Optional):</label>
+                <input type="text" id="dispenseRxRef" class="dispense-text-input" placeholder="e.g. RX-2026-904" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Stock Impact Forecast -->
+          <div class="stock-forecast-banner" id="stockForecastBanner">
+            <span class="forecast-icon">&#128200;</span>
+            <div class="forecast-text" id="stockForecastText">
+              Current: <strong>35 units</strong> &rarr; After Dispense: <strong>34 units</strong> (In Stock)
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="dispense-actions-footer">
+            <button type="button" id="btnConfirmDispense" class="btn-dispense-confirm">
+              <span>&#10003;</span> Confirm Dispense &amp; Update Inventory
+            </button>
+            <button type="button" id="btnCancelDispense" class="btn-dispense-cancel">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         FEATURE 2: OFFICIAL PATIENT BIOEQUIVALENCE CERTIFICATE & TRUST RECEIPT MODAL
+         ========================================================================== -->
+    <div id="trustCertificateModal" class="modal-overlay certificate-modal-overlay" aria-hidden="true">
+      <div class="modal-content certificate-modal-card">
+        <div class="cert-modal-header no-print">
+          <div class="cert-header-meta">
+            <span class="cert-shield-badge">&#128737;&#65039;</span>
+            <div>
+              <h3>Official Bioequivalence Certificate &amp; Patient Trust Slip</h3>
+              <p>Printable clinical equivalence proof with active API verification and cost breakdown</p>
+            </div>
+          </div>
+          <div class="cert-header-actions">
+            <button type="button" id="btnPrintCertificateAction" class="btn-cert-print">
+              <span>&#128438;&#65039;</span> Print Certificate / Save PDF
+            </button>
+            <button id="closeTrustCertModalBtn" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+          </div>
+        </div>
+
+        <div class="certificate-printable-sheet" id="certificatePrintableSheet">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         FEATURE 3: INWARD STOCK INTAKE / ADD NEW BATCH MODAL
+         ========================================================================== -->
+    <div id="inwardStockModal" class="modal-overlay inward-modal-overlay" aria-hidden="true">
+      <div class="modal-content inward-modal-card">
+        <div class="op-modal-header inward-header">
+          <div class="op-modal-title-row">
+            <span class="op-modal-icon-badge">&#128230;</span>
+            <div>
+              <h3>Inward Stock Intake &bull; New Batch Intake</h3>
+              <p>Record arriving distributor shipment &bull; Physical shelf assignment &bull; Real-time D3 synchronization</p>
+            </div>
+          </div>
+          <button id="closeInwardModalBtn" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+        </div>
+
+        <div class="inward-modal-body">
+          <!-- Quick Preset Selector for Rapid Intake -->
+          <div class="inward-presets-strip">
+            <span class="inward-presets-label">&#9889; Fast Preset Templates:</span>
+            <div class="inward-presets-chips" id="inwardPresetsChips">
+              <button type="button" class="inward-preset-btn" data-name="Augmentin 625 Duo" data-salt="Amoxicillin 500mg + Clavulanic Acid 125mg" data-brand="Augmentin (GSK)" data-shelf="Rack B1 - Shelf 2" data-cat="Broad Spectrum Antibiotic">Augmentin 625</button>
+              <button type="button" class="inward-preset-btn" data-name="Atorva 20mg Statin" data-salt="Atorvastatin 20mg" data-brand="Atorva (Zydus)" data-shelf="Rack C3 - Shelf 3" data-cat="Cardiovascular / Lipid-Lowering Statin">Atorva 20mg</button>
+              <button type="button" class="inward-preset-btn" data-name="Pantocid 40mg Tablet" data-salt="Pantoprazole 40mg" data-brand="Pantocid (Sun Pharma)" data-shelf="Rack E1 - Shelf 2" data-cat="Gastrointestinal / Proton Pump Inhibitor">Pantocid 40</button>
+              <button type="button" class="inward-preset-btn" data-name="Glycomet 500mg SR" data-salt="Metformin 500mg" data-brand="Glycomet (USV)" data-shelf="Rack D4 - Shelf 4" data-cat="Antidiabetic / Biguanide">Glycomet 500</button>
+            </div>
+          </div>
+
+          <form id="inwardStockForm" class="inward-form-grid">
+            <div class="inward-field-item">
+              <label for="inwardMedName">Medicine Commercial Name &amp; Strength *</label>
+              <input type="text" id="inwardMedName" class="inward-input" placeholder="e.g. Clavam 625 Tablet" required />
+            </div>
+
+            <div class="inward-field-item">
+              <label for="inwardBrandName">Brand &amp; Manufacturer Lab *</label>
+              <input type="text" id="inwardBrandName" class="inward-input" placeholder="e.g. Clavam (Alkem)" required />
+            </div>
+
+            <div class="inward-field-item span-two">
+              <label for="inwardActiveSalt">Active Chemical Salt &amp; Strength (API) *</label>
+              <input type="text" id="inwardActiveSalt" class="inward-input" placeholder="e.g. Amoxicillin 500mg + Clavulanic Acid 125mg" required />
+            </div>
+
+            <div class="inward-field-item">
+              <label for="inwardTherapeuticCat">Therapeutic Category</label>
+              <input type="text" id="inwardTherapeuticCat" class="inward-input" placeholder="e.g. Antibacterial / Beta-lactamase" />
+            </div>
+
+            <div class="inward-field-item">
+              <label for="inwardShelfLocation">Dispensary Physical Shelf Location *</label>
+              <input type="text" id="inwardShelfLocation" class="inward-input" placeholder="e.g. Rack B1 - Shelf 4" required />
+            </div>
+
+            <div class="inward-field-item">
+              <label for="inwardExpiryMonths">Shelf-Life Expiry (Months) *</label>
+              <input type="number" id="inwardExpiryMonths" class="inward-input" min="1" max="48" step="0.5" value="12" required />
+            </div>
+
+            <div class="inward-field-item">
+              <label for="inwardStockQty">Inward Quantity (Units / Packs) *</label>
+              <input type="number" id="inwardStockQty" class="inward-input" min="1" max="5000" value="50" required />
+            </div>
+
+            <div class="inward-field-item span-two">
+              <label for="inwardBarcode">Packaging Barcode / EAN-13 (Optional)</label>
+              <input type="text" id="inwardBarcode" class="inward-input" placeholder="e.g. 8901030382066 (or auto-generated)" />
+            </div>
+
+            <div class="inward-form-actions span-two">
+              <button type="submit" id="btnSaveInwardBatch" class="btn-inward-submit">
+                <span>&#10010;</span> Record Inward Batch &amp; Stock Shelf
+              </button>
+              <button type="button" id="btnCancelInward" class="btn-inward-cancel">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         FEATURE 4: SUPPLIER PURCHASE ORDER (PO) GENERATOR MODAL
+         ========================================================================== -->
+    <div id="purchaseOrderModal" class="modal-overlay po-modal-overlay" aria-hidden="true">
+      <div class="modal-content po-modal-card">
+        <div class="op-modal-header po-header">
+          <div class="op-modal-title-row">
+            <span class="op-modal-icon-badge">&#128221;</span>
+            <div>
+              <h3>Supplier Restock Purchase Order (PO) Generator</h3>
+              <p>Automated consolidation of Low Stock (&lt;5 units) and Critical Expiry (&le;4 mo) batches</p>
+            </div>
+          </div>
+          <button id="closePoModalBtn" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+        </div>
+
+        <div class="po-modal-body">
+          <div class="po-distributor-bar">
+            <div class="distributor-select-wrap">
+              <label for="poDistributorSelect">Wholesale Distributor:</label>
+              <select id="poDistributorSelect" class="po-dropdown">
+                <option value="apex">Apex Wholesale Pharma Distributors (Tirupur / Coimbatore)</option>
+                <option value="apollo">MedSupply Logistics Regional Depot</option>
+                <option value="mankind_direct">Mankind &amp; Sun Pharma Direct C&amp;F Agency</option>
+              </select>
+            </div>
+            <div class="po-meta-badge" id="poRefNumberBadge">
+              PO Ref: <strong>PO-2026-NM-042</strong>
+            </div>
+          </div>
+
+          <!-- PO Line Items Table -->
+          <div class="po-table-wrap">
+            <table class="po-table" id="poTable">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Medicine &amp; Brand</th>
+                  <th>Active Molecule</th>
+                  <th>Current Stock</th>
+                  <th>Urgency Status</th>
+                  <th>Reorder Qty</th>
+                  <th>Estimated Price</th>
+                  <th>Line Total</th>
+                </tr>
+              </thead>
+              <tbody id="poTableBody">
+                <!-- Filled dynamically by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- PO Summary Strip -->
+          <div class="po-summary-strip" id="poSummaryStrip">
+            <div class="po-stat">
+              <span class="stat-label">Total Batches to Reorder:</span>
+              <strong id="poTotalBatchesCount">0</strong>
+            </div>
+            <div class="po-stat">
+              <span class="stat-label">Total Units on PO:</span>
+              <strong id="poTotalUnitsCount">0 units</strong>
+            </div>
+            <div class="po-stat highlight">
+              <span class="stat-label">Estimated PO Value:</span>
+              <strong id="poTotalEstimatedValue">&#8377;0</strong>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="po-actions-footer">
+            <button type="button" id="btnCopyPoClipboard" class="btn-po-action secondary">
+              <span>&#128203;</span> Copy PO to Clipboard (WhatsApp/Email)
+            </button>
+            <button type="button" id="btnPrintPoSheet" class="btn-po-action secondary">
+              <span>&#128438;&#65039;</span> Print Purchase Order
+            </button>
+            <button type="button" id="btnMarkPoOrdered" class="btn-po-action primary">
+              <span>&#10003;</span> Mark PO as Transmitted &amp; Log
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==========================================================================
+         FEATURE 5: LIVE DISPENSING & INWARD AUDIT TRAIL MODAL
+         ========================================================================== -->
+    <div id="auditLogModal" class="modal-overlay audit-modal-overlay" aria-hidden="true">
+      <div class="modal-content audit-modal-card">
+        <div class="op-modal-header audit-header">
+          <div class="op-modal-title-row">
+            <span class="op-modal-icon-badge">&#128220;</span>
+            <div>
+              <h3>Dispensary Activity &amp; Audit Trail Ledger</h3>
+              <p>Immutable log of dispensing transactions, inward stock intake, and batch movements</p>
+            </div>
+          </div>
+          <div class="audit-header-controls">
+            <button type="button" id="btnExportAuditCsv" class="btn-audit-export" title="Export audit trail to CSV">
+              <span>&#128190;</span> Export CSV
+            </button>
+            <button id="closeAuditModalBtn" class="modal-close-btn" type="button" aria-label="Close modal">&times;</button>
+          </div>
+        </div>
+
+        <div class="audit-modal-body">
+          <div class="audit-filter-tabs">
+            <button type="button" class="audit-tab-btn active" data-filter="all">All Events (<span id="auditAllCount">0</span>)</button>
+            <button type="button" class="audit-tab-btn" data-filter="dispense">Dispensed (<span id="auditDispenseCount">0</span>)</button>
+            <button type="button" class="audit-tab-btn" data-filter="inward">Inward Intake (<span id="auditInwardCount">0</span>)</button>
+            <button type="button" class="audit-tab-btn" data-filter="po">Purchase Orders (<span id="auditPoCount">0</span>)</button>
+          </div>
+
+          <div class="audit-timeline-container" id="auditTimelineContainer">
+            <!-- Timeline items rendered dynamically by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Application Script -->
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

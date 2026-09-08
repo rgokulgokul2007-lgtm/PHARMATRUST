@@ -1,0 +1,6 @@
+{
+  "name": "PharmaTrust - Pharmacy Inventory & Brand Matcher",
+  "description": "Pharmacy inventory management system with expiry-date shelf locator and customer trust interface for chemical substitute brands.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
