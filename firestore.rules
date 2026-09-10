@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================================================
+    // PharmaTrust - Security Rules for "PharmaInventory" Collection
+    // ========================================================================
+    // Updated Schema:
+    //  - name / drugName / medicine_name (string, non-empty, <= 150 chars)
+    //  - stockLevel / stock_quantity (int/number, >= 0)
+    //  - activeMolecule / api / active_salt (string)
+    //  - expiry / expiryDate / expiry_date_months (string or number)
+    //  - qrCodeData (string, unique batch matrix string, <= 200 chars)
+    //  - shelfLocation / physical_shelf_location (string, <= 100 chars)
+    // ========================================================================
+
+    match /PharmaInventory/{medicationId} {
+      // 1. READ: Dispensary dashboards and terminals can stream live inventory
+      allow read: if true;
+
+      // 2. CREATE & UPDATE: Validate pharmaceutical document schema & qrCodeData
+      allow create, update: if 
+        // Drug name validation
+        ((request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 150) ||
+         (request.resource.data.drugName is string && request.resource.data.drugName.size() > 0 && request.resource.data.drugName.size() <= 150) ||
+         (request.resource.data.medicine_name is string && request.resource.data.medicine_name.size() > 0)) &&
+
+        // Stock level validation (non-negative)
+        (((request.resource.data.stockLevel is int || request.resource.data.stockLevel is number) && request.resource.data.stockLevel >= 0) ||
+         ((request.resource.data.stock_quantity is int || request.resource.data.stock_quantity is number) && request.resource.data.stock_quantity >= 0)) &&
+
+        // Active Molecule / API / Active Salt string
+        (request.resource.data.activeMolecule is string || request.resource.data.api is string || request.resource.data.active_salt is string) &&
+        
+        // Expiry date/months provided
+        (request.resource.data.expiry is string || request.resource.data.expiryDate is string || request.resource.data.expiry_date_months is number) &&
+
+        // qrCodeData schema definition: Unique batch matrix string
+        (!('qrCodeData' in request.resource.data) || (request.resource.data.qrCodeData is string && request.resource.data.qrCodeData.size() <= 200)) &&
+
+        // shelfLocation schema definition: Physical shelf location
+        (!('shelfLocation' in request.resource.data) || (request.resource.data.shelfLocation is string && request.resource.data.shelfLocation.size() <= 100)) &&
+        (!('physical_shelf_location' in request.resource.data) || (request.resource.data.physical_shelf_location is string && request.resource.data.physical_shelf_location.size() <= 100));
+
+      // 3. DELETE: Allowed in prototype testing
+      allow delete: if true;
+    }
+
+    // Default deny for all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

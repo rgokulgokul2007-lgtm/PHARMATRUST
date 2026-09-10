@@ -1,0 +1,656 @@
+/* ==========================================================================
+   PharmaTrust - AI-Powered Inventory & Brand Matching Engine
+   Login Page Stylesheet (login.css)
+   Aesthetic: Deep Cyber-Medical Trust & High-Tech AI (Glassmorphism)
+   ========================================================================== */
+
+:root {
+  /* Color Palette */
+  --bg-dark: #070b14;
+  --bg-surface: #0b1120;
+  --bg-card: rgba(15, 23, 42, 0.75);
+  --border-card: rgba(56, 189, 248, 0.2);
+  --border-card-hover: rgba(56, 189, 248, 0.4);
+
+  /* Primary High-Tech Accents */
+  --primary-blue: #1d4ed8;
+  --primary-deep: #1e3a8a;
+  --cyan-accent: #06b6d4;
+  --cyan-glow: #22d3ee;
+  --cyan-bright: #38bdf8;
+  --cyan-light: rgba(6, 182, 212, 0.12);
+
+  /* Neutrals & Typography */
+  --text-white: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-subtle: #64748b;
+  --input-bg: rgba(15, 23, 42, 0.65);
+  --input-border: rgba(51, 65, 85, 0.8);
+  --input-border-focus: #06b6d4;
+
+  /* Status Colors */
+  --emerald-success: #10b981;
+  --rose-danger: #f43f5e;
+
+  /* Typography Scale */
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Reset & Global Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-family);
+  background-color: var(--bg-dark);
+  color: var(--text-white);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Ambient High-Tech Medical Background */
+.login-body {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background-color: var(--bg-dark);
+  background-image: 
+    radial-gradient(circle at 15% 20%, rgba(30, 58, 138, 0.4) 0%, transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(6, 182, 212, 0.25) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.8) 0%, transparent 70%),
+    radial-gradient(circle at 75% 15%, rgba(14, 165, 233, 0.2) 0%, transparent 35%);
+  background-attachment: fixed;
+}
+
+/* Subtle Animated Cyber Grid Background */
+.bg-grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ambient Glowing Orbs */
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 14s ease-in-out infinite alternate;
+}
+
+.orb-1 {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, #0284c7 0%, transparent 70%);
+  top: 10%;
+  left: 15%;
+}
+
+.orb-2 {
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, #06b6d4 0%, transparent 70%);
+  bottom: 10%;
+  right: 15%;
+  animation-delay: -7s;
+}
+
+@keyframes orbFloat {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    transform: translateY(-30px) scale(1.08);
+  }
+}
+
+/* Main Login Container */
+.login-container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 460px;
+}
+
+/* Glassmorphism Frosted Card */
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-card);
+  border-radius: 20px;
+  padding: 40px 36px;
+  box-shadow: 
+    0 25px 60px -15px rgba(0, 0, 0, 0.6),
+    0 0 35px -5px rgba(6, 182, 212, 0.15),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: var(--border-card-hover);
+  box-shadow: 
+    0 25px 60px -15px rgba(0, 0, 0, 0.65),
+    0 0 45px -5px rgba(6, 182, 212, 0.22),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* Brand & Logo Header */
+.card-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  margin-bottom: 14px;
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 100px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cyan-glow);
+  text-transform: uppercase;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  background-color: var(--cyan-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--cyan-accent);
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+.brand-logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.logo-symbol {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e40af 0%, #0284c7 60%, #06b6d4 100%);
+  border-radius: 12px;
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(6, 182, 212, 0.4);
+  flex-shrink: 0;
+}
+
+.logo-symbol svg {
+  width: 24px;
+  height: 24px;
+}
+
+.brand-text-wrap {
+  text-align: left;
+}
+
+.brand-title {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-white);
+  line-height: 1.15;
+}
+
+.brand-title span {
+  background: linear-gradient(135deg, #38bdf8 0%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-slogan {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+/* Security Notice / Status Banner */
+.login-status-banner {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  margin-bottom: 20px;
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+.login-status-banner.error {
+  display: flex;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: #fca5a5;
+}
+
+.login-status-banner.success {
+  display: flex;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Form Styles */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--text-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.input-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 14px 12px 42px;
+  background: var(--input-bg);
+  border: 1.5px solid var(--input-border);
+  border-radius: 10px;
+  color: var(--text-white);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: all 0.25s ease;
+  outline: none;
+}
+
+.form-input::placeholder {
+  color: #64748b;
+}
+
+.form-input:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.form-input:focus {
+  border-color: var(--cyan-accent);
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.22);
+}
+
+.input-container:focus-within .input-icon {
+  color: var(--cyan-glow);
+}
+
+/* Password Toggle Visibility Button */
+.toggle-password-btn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-subtle);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.toggle-password-btn:hover {
+  color: var(--cyan-glow);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.toggle-password-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Form Options (Remember & Forgot) */
+.form-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.remember-me-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.custom-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--input-border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  transition: all 0.2s ease;
+}
+
+.custom-checkbox:checked {
+  background: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+}
+
+.custom-checkbox:checked::before {
+  content: "";
+  width: 8px;
+  height: 5px;
+  border-left: 2px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.custom-checkbox:focus-visible {
+  outline: 2px solid var(--cyan-glow);
+  outline-offset: 2px;
+}
+
+.forgot-password-link {
+  color: var(--cyan-bright);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+
+.forgot-password-link:hover {
+  color: var(--text-white);
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+  text-decoration: underline;
+}
+
+/* Buttons Section */
+.form-actions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+/* Primary Login Button */
+.btn-primary-login {
+  position: relative;
+  width: 100%;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  background: linear-gradient(135deg, #1d4ed8 0%, #0284c7 50%, #06b6d4 100%);
+  box-shadow: 
+    0 4px 16px rgba(2, 132, 199, 0.35),
+    0 0 20px rgba(6, 182, 212, 0.25);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+
+.btn-primary-login::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.75s ease;
+}
+
+.btn-primary-login:hover:not(:disabled)::after {
+  left: 140%;
+}
+
+.btn-primary-login:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 
+    0 6px 22px rgba(2, 132, 199, 0.45),
+    0 0 30px rgba(6, 182, 212, 0.4);
+  background: linear-gradient(135deg, #2563eb 0%, #0369a1 40%, #0891b2 100%);
+}
+
+.btn-primary-login:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary-login:disabled {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+/* Secondary Demo Login Button (Crucial Requirement) */
+.btn-demo-login {
+  position: relative;
+  width: 100%;
+  padding: 12px 20px;
+  background: rgba(6, 182, 212, 0.08);
+  border: 1.5px solid var(--cyan-accent);
+  border-radius: 10px;
+  color: var(--cyan-glow);
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.15);
+}
+
+.btn-demo-login:hover {
+  background: rgba(6, 182, 212, 0.18);
+  color: #ffffff;
+  border-color: var(--cyan-bright);
+  box-shadow: 
+    0 0 22px rgba(6, 182, 212, 0.45),
+    inset 0 0 10px rgba(6, 182, 212, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-demo-login:active {
+  transform: translateY(0);
+  background: rgba(6, 182, 212, 0.25);
+}
+
+/* Spinner Icon for Loading State */
+.btn-spinner {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.btn-primary-login.loading .btn-spinner {
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Compliance Badges Footer */
+.compliance-footer {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+}
+
+.compliance-badges-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.compliance-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.compliance-item svg {
+  width: 14px;
+  height: 14px;
+  color: var(--cyan-accent);
+}
+
+.system-version-tag {
+  font-size: 0.7rem;
+  color: #475569;
+  letter-spacing: 0.04em;
+}
+
+/* Accessible Screen Reader Helper */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+  .login-body {
+    padding: 16px 12px;
+  }
+
+  .glass-card {
+    padding: 28px 20px;
+    border-radius: 16px;
+  }
+
+  .brand-title {
+    font-size: 1.45rem;
+  }
+
+  .logo-symbol {
+    width: 38px;
+    height: 38px;
+  }
+
+  .logo-symbol svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .btn-primary-login,
+  .btn-demo-login {
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    min-height: 46px; /* High touch target for mobile devices */
+  }
+
+  .compliance-badges-row {
+    gap: 10px;
+  }
+}

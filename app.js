@@ -1,5 +1,7 @@
 import { Html5Qrcode } from "html5-qrcode";
 import * as d3 from "d3";
+import { db } from "./firebase.js";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 /**
  * PharmaTrust & Smart Shelf Locator
@@ -388,6 +390,36 @@ const BRANCH_DATA = {
   ]
 };
 
+/**
+ * Generates a unique, high-entropy batch QR code matrix string
+ * Format: PT-QR-[BRAND_CODE]-[SHELF_TAG]-[RANDOM_SALT]
+ * e.g. PT-QR-AUGM-RKB1-M9K2
+ */
+export function generateBatchQrCode(brandOrName = "MED", shelfLoc = "") {
+  const brandSlug = (brandOrName || "MED")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .substring(0, 4)
+    .toUpperCase() || "DRUG";
+  const shelfSlug = (shelfLoc || "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .substring(0, 4)
+    .toUpperCase();
+  const timeHex = Date.now().toString(36).toUpperCase().slice(-4);
+  const randCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `PT-QR-${brandSlug}${shelfSlug ? `-${shelfSlug}` : ""}-${timeHex}${randCode}`;
+}
+
+// Auto-seed unique batch QR code matrix strings for all initial medicines across all branches
+Object.values(BRANCH_DATA).forEach((branchList) => {
+  branchList.forEach((item, index) => {
+    if (!item.qrCodeData) {
+      const slug = (item.brand_name || item.medicine_name || "MED").replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).toUpperCase();
+      const shelf = (item.physical_shelf_location || "").replace(/[^a-zA-Z0-9]/g, "").substring(0, 4).toUpperCase();
+      item.qrCodeData = `PT-QR-${slug}-${shelf}-${101 + index}`;
+    }
+  });
+});
+
 // Application State
 let activeBranchId = "avinashi_main";
 let inventoryData = [...BRANCH_DATA.avinashi_main];
@@ -648,6 +680,31 @@ function setupEventListeners() {
     trustPanel.style.display = "flex";
     runTrustMatcher();
   });
+
+  // Sign Out Action
+  const signOutBtn = document.getElementById("signOutBtn");
+  if (signOutBtn) {
+    signOutBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      try {
+        sessionStorage.removeItem("pharmaTrustUser");
+      } catch {}
+      window.location.href = "login.html";
+    });
+  }
+
+  // Restore authenticated session metadata to terminal badge
+  try {
+    const savedUser = sessionStorage.getItem("pharmaTrustUser");
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      const terminalBadge = document.getElementById("activeTerminalBadge");
+      if (terminalBadge && parsed.email) {
+        terminalBadge.textContent = `${parsed.email.split("@")[0]} • Counter-01`;
+        terminalBadge.title = `Authenticated: ${parsed.email} (${parsed.role || "Pharmacist"})`;
+      }
+    }
+  } catch {}
 
   // Search Input
   const searchInput = document.getElementById("medicineSearchInput");
@@ -1383,9 +1440,19 @@ function renderDashboard() {
         </span>
       </td>
       <td>
-        <span class="shelf-badge">
-          <span class="shelf-icon">&#9638;</span> ${item.physical_shelf_location}
-        </span>
+        <div class="shelf-location-cell" style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+          <span class="shelf-badge">
+            <span class="shelf-icon">&#9638;</span> ${item.physical_shelf_location}
+          </span>
+          ${
+            item.qrCodeData
+              ? `<div class="qr-code-shelf-tag" title="Unique Batch QR Code Matrix ID • Click to copy" style="display:inline-flex; align-items:center; gap:5px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.69rem; color:#38bdf8; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.28); border-radius:4px; padding:2px 7px; cursor:pointer;" onclick="navigator.clipboard?.writeText('${item.qrCodeData}'); showToast?.('📋 Copied QR: ${item.qrCodeData}');">
+                   <span style="font-size:0.78rem; line-height:1;">▦</span>
+                   <span>${item.qrCodeData}</span>
+                 </div>`
+              : ""
+          }
+        </div>
       </td>
       <td>
         <div class="stock-cell-wrap">
@@ -3107,9 +3174,27 @@ function initEssentialFeatures() {
       if (shelfInput) shelfInput.value = shelf;
       if (catInput) catInput.value = cat;
 
+      const qrInput = document.getElementById("inwardQrCode");
+      if (qrInput) {
+        qrInput.value = generateBatchQrCode(brand || name, shelf);
+      }
+
       playAudioChime("click");
       showToast(`⚡ Filled inward preset template: ${name}`);
     });
+  });
+
+  // Regenerate QR Code String button listener in Inward Intake modal
+  const btnRegenQr = document.getElementById("btnRegenerateInwardQr");
+  btnRegenQr?.addEventListener("click", () => {
+    const brand = document.getElementById("inwardBrandName")?.value || document.getElementById("inwardMedName")?.value || "BATCH";
+    const shelf = document.getElementById("inwardShelfLocation")?.value || "SHELF";
+    const qrInput = document.getElementById("inwardQrCode");
+    if (qrInput) {
+      qrInput.value = generateBatchQrCode(brand, shelf);
+      playAudioChime("click");
+      showToast(`⟳ Generated new batch QR: ${qrInput.value}`);
+    }
   });
 
   inwardForm?.addEventListener("submit", handleInwardSubmit);
@@ -3572,6 +3657,12 @@ function openInwardModal() {
   const qtyInput = document.getElementById("inwardStockQty");
   if (qtyInput) qtyInput.value = "50";
 
+  // Auto-generate unique batch QR code string
+  const qrInput = document.getElementById("inwardQrCode");
+  if (qrInput) {
+    qrInput.value = generateBatchQrCode("BATCH", "RKB2");
+  }
+
   if (modal) {
     modal.classList.add("active");
     modal.setAttribute("aria-hidden", "false");
@@ -3597,6 +3688,7 @@ function handleInwardSubmit(e) {
   const expiryMonths = parseFloat(document.getElementById("inwardExpiryMonths")?.value) || 12;
   const qty = parseInt(document.getElementById("inwardStockQty")?.value, 10) || 50;
   const barcode = document.getElementById("inwardBarcode")?.value.trim() || ("890103038" + Math.floor(2000 + Math.random() * 7000));
+  const qrCodeData = document.getElementById("inwardQrCode")?.value.trim() || generateBatchQrCode(brandName, shelfLoc);
 
   if (!medName || !brandName || !activeSalt || !shelfLoc) {
     showToast("⚠️ Please fill in all required fields");
@@ -3618,6 +3710,7 @@ function handleInwardSubmit(e) {
     stock_quantity: qty,
     low_stock_threshold: 5,
     physical_shelf_location: shelfLoc,
+    qrCodeData: qrCodeData,
     barcode: barcode
   };
 
@@ -3636,15 +3729,42 @@ function handleInwardSubmit(e) {
     title: `Inward Intake: ${brandName} (${qty} Units)`,
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " Today",
     timestamp: Date.now(),
-    detail: `Arrived distributor batch. Assigned shelf: <code>${shelfLoc}</code>. Expiry runway: <strong>${expiryMonths} Months</strong>. Barcode: <code>${barcode}</code>.`,
+    detail: `Arrived distributor batch. Assigned shelf: <code>${shelfLoc}</code> &bull; QR Matrix: <code>${qrCodeData}</code>. Expiry runway: <strong>${expiryMonths} Months</strong>. Barcode: <code>${barcode}</code>.`,
     tags: ["Inward Intake", `Branch: ${BRANCH_METADATA[activeBranchId]?.name || "Dispensary"}`]
   };
   dispensaryAuditLog.unshift(auditEntry);
 
+  // Synchronize inward stock batch to Firestore collection "PharmaInventory"
+  try {
+    const pharmaCol = collection(db, "PharmaInventory");
+    addDoc(pharmaCol, {
+      name: `${brandName} - ${medName}`,
+      drugName: medName,
+      brand_name: brandName,
+      stockLevel: qty,
+      stock_quantity: qty,
+      activeMolecule: activeSalt,
+      api: activeSalt,
+      shelfLocation: shelfLoc,
+      physical_shelf_location: shelfLoc,
+      qrCodeData: qrCodeData,
+      barcode: barcode,
+      expiry: `${expiryMonths} Months`,
+      status: qty < 5 ? "Low Stock" : "In Stock",
+      createdAt: serverTimestamp()
+    }).then((docRef) => {
+      console.log(`[Firestore] Inward batch synchronized to PharmaInventory (ID: ${docRef.id}, QR: ${qrCodeData})`);
+    }).catch((err) => {
+      console.warn("[Firestore] Inward intake standby sync:", err.message);
+    });
+  } catch (err) {
+    console.warn("[Firestore] Inward intake standby sync:", err);
+  }
+
   // Sound chime
   playAudioChime("inward");
 
-  showToast(`📦 Inward Stock Recorded: Added ${qty} units of ${brandName} to shelf ${shelfLoc}`);
+  showToast(`📦 Inward Stock Recorded: Added ${qty} units of ${brandName} to ${shelfLoc} (QR: ${qrCodeData})`);
   closeInwardModal();
 
   // Re-populate dropdowns, dashboard and charts

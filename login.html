@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PharmaTrust - AI-Powered Inventory & Brand Matching Engine | Login</title>
+  <meta name="description" content="Secure clinical gateway for PharmaTrust: AI-driven pharmaceutical supply chain inventory and brand matching engine." />
+  <meta property="og:title" content="PharmaTrust - Secure Login" />
+  <meta property="og:description" content="AI-Powered Inventory and Brand Matching Engine for the pharmaceutical supply chain." />
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./login.css" />
+</head>
+<body class="login-body">
+  <!-- Subtle Cyber Ambient Background Orbs & Grid -->
+  <div class="bg-grid-overlay" aria-hidden="true"></div>
+  <div class="orb orb-1" aria-hidden="true"></div>
+  <div class="orb orb-2" aria-hidden="true"></div>
+
+  <main class="login-container">
+    <div class="glass-card" id="loginCard">
+      
+      <!-- Brand & AI Medical Logo Header -->
+      <header class="card-brand">
+        <div class="brand-badge" id="engineBadge">
+          <span class="pulse-dot" aria-hidden="true"></span>
+          AI Matching Engine v2.4
+        </div>
+        
+        <div class="brand-logo-wrap">
+          <!-- PharmaTrust Medical + AI Shield Icon -->
+          <div class="logo-symbol" aria-hidden="true">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+          </div>
+          
+          <div class="brand-text-wrap">
+            <h1 class="brand-title">Pharma<span>Trust</span></h1>
+            <p class="brand-slogan">AI Inventory &amp; Bioequivalent Brand Engine</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- Status Notification / Banner -->
+      <div id="statusBanner" class="login-status-banner" role="alert" aria-live="polite">
+        <span id="statusIcon" aria-hidden="true">ℹ️</span>
+        <span id="statusMessage">Authentication notification</span>
+      </div>
+
+      <!-- Authentication Form -->
+      <form class="login-form" id="loginForm" novalidate>
+        
+        <!-- Email / Username Input -->
+        <div class="form-group">
+          <label for="usernameInput" class="form-label">
+            <span>Work Email or Pharmacist ID</span>
+          </label>
+          <div class="input-container">
+            <span class="input-icon" aria-hidden="true">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              id="usernameInput"
+              name="username"
+              class="form-input"
+              placeholder="e.g. pharmacist@pharmatrust.ai"
+              autocomplete="username"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- Password Input with Eye Toggle -->
+        <div class="form-group">
+          <label for="passwordInput" class="form-label">
+            <span>Security Password</span>
+          </label>
+          <div class="input-container">
+            <span class="input-icon" aria-hidden="true">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </span>
+            <input
+              type="password"
+              id="passwordInput"
+              name="password"
+              class="form-input"
+              placeholder="••••••••••••"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              id="togglePasswordBtn"
+              class="toggle-password-btn"
+              aria-label="Toggle password visibility"
+              title="Toggle password visibility"
+            >
+              <!-- Eye Icon (Default) -->
+              <svg id="eyeIcon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <!-- Eye Slash Icon (Hidden by default) -->
+              <svg id="eyeOffIcon" style="display:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Remember Me & Forgot Password Row -->
+        <div class="form-options-row">
+          <label class="remember-me-label">
+            <input type="checkbox" id="rememberMe" class="custom-checkbox" checked />
+            <span>Remember Dispensary</span>
+          </label>
+          <a href="#" id="forgotPasswordLink" class="forgot-password-link">Forgot password?</a>
+        </div>
+
+        <!-- Form Action Buttons -->
+        <div class="form-actions-group">
+          <!-- Primary Login Button -->
+          <button type="submit" id="loginBtn" class="btn-primary-login">
+            <span class="btn-spinner" id="loginSpinner" aria-hidden="true"></span>
+            <span id="loginBtnText">Login</span>
+          </button>
+
+          <!-- Crucial Requirement: Demo Login Button -->
+          <button type="button" id="demoLoginBtn" class="btn-demo-login">
+            <span>👉 Try Demo Login</span>
+          </button>
+        </div>
+      </form>
+
+      <!-- Clinical Security & Compliance Footnote -->
+      <footer class="compliance-footer">
+        <div class="compliance-badges-row">
+          <div class="compliance-item" title="Encrypted Connection">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+            </svg>
+            <span>256-Bit SSL</span>
+          </div>
+          <div class="compliance-item" title="Clinical Compliance Standard">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+            <span>CDSCO / GS1 Verified</span>
+          </div>
+          <div class="compliance-item" title="Audit Trail Compliant">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd" />
+            </svg>
+            <span>21 CFR Part 11</span>
+          </div>
+        </div>
+        <div class="system-version-tag">PharmaTrust Enterprise &bull; Secure Pharmacist Terminal</div>
+      </footer>
+
+    </div>
+  </main>
+
+  <!-- Script Module -->
+  <script type="module" src="./login.js"></script>
+</body>
+</html>
