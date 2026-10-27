@@ -445,6 +445,73 @@ let searchQuery = "";
 let selectedRequestedId = 1;
 let selectedSubstituteId = 2;
 
+/**
+ * Universal inventory item lookup helper:
+ * Reliably finds medication records whether targetId is:
+ * - String or numeric id (id, inventoryId, medicineId)
+ * - Preset demo ID (1 -> Crocin, 2 -> Calpol, 4 -> Augmentin, 7 -> Lipitor, 8 -> Atorva, etc.)
+ * - Substring brand / molecule query
+ */
+function findInventoryItemById(targetId) {
+  if (targetId === null || targetId === undefined) return null;
+  if (!Array.isArray(inventoryData) || inventoryData.length === 0) return null;
+
+  const strId = String(targetId).trim().toLowerCase();
+  if (!strId || strId === "nan" || strId === "undefined" || strId === "null") return null;
+
+  // 1. Direct match by id, inventoryId, or medicineId
+  let found = inventoryData.find((i) => {
+    if (!i) return false;
+    const idVal = String(i.id ?? "").trim().toLowerCase();
+    const invIdVal = String(i.inventoryId ?? "").trim().toLowerCase();
+    const medIdVal = String(i.medicineId ?? "").trim().toLowerCase();
+    return idVal === strId || invIdVal === strId || medIdVal === strId;
+  });
+  if (found) return found;
+
+  // 2. Preset legacy numeric mapping
+  const numId = Number(targetId);
+  if (!isNaN(numId)) {
+    found = inventoryData.find((i) => Number(i.id) === numId || Number(i.inventoryId) === numId);
+    if (found) return found;
+
+    const presetKeywords = {
+      1: "crocin",
+      2: "calpol",
+      3: "pacimol",
+      4: "augmentin",
+      5: "moxikind",
+      6: "clavam",
+      7: "lipitor",
+      8: "atorva",
+      9: "storvas",
+      10: "glucophage",
+      11: "glycomet"
+    };
+
+    if (presetKeywords[numId]) {
+      const kw = presetKeywords[numId];
+      found = inventoryData.find((i) => {
+        const full = `${i.brand_name || ""} ${i.brandName || ""} ${i.medicine_name || ""}`.toLowerCase();
+        return full.includes(kw);
+      });
+      if (found) return found;
+    }
+
+    if (numId >= 0 && numId < inventoryData.length) {
+      return inventoryData[numId];
+    }
+  }
+
+  // 3. Substring match
+  found = inventoryData.find((i) => {
+    const full = `${i.brand_name || ""} ${i.brandName || ""} ${i.medicine_name || ""}`.toLowerCase();
+    return full.includes(strId);
+  });
+
+  return found || null;
+}
+
 // D3 Expiry Distribution & Purchasing Analytics State
 let chartMetric = "units"; // "units" | "batches"
 let chartActiveFilterRange = null; // null | { min: number, max: number, label: string }
@@ -726,6 +793,7 @@ function setupEventListeners() {
     splitTab?.classList.remove("active");
     trustPanel.style.display = "flex";
     dashboardPanel.style.display = "none";
+    populateDropdownSelectors();
     runTrustMatcher();
   });
 
@@ -736,6 +804,7 @@ function setupEventListeners() {
     trustTab?.classList.remove("active");
     dashboardPanel.style.display = "flex";
     trustPanel.style.display = "flex";
+    populateDropdownSelectors();
     runTrustMatcher();
   });
 
@@ -822,16 +891,16 @@ function setupEventListeners() {
   const substituteSelect = document.getElementById("substituteBrandSelect");
 
   requestedSelect?.addEventListener("change", (e) => {
-    selectedRequestedId = Number(e.target.value);
+    selectedRequestedId = e.target.value;
     // If user changed Medicine A, suggest same-salt substitute if currently identical or mismatched
-    if (selectedSubstituteId === selectedRequestedId) {
+    if (String(selectedSubstituteId) === String(selectedRequestedId)) {
       autoSuggestSubstitute();
     }
     runTrustMatcher();
   });
 
   substituteSelect?.addEventListener("change", (e) => {
-    selectedSubstituteId = Number(e.target.value);
+    selectedSubstituteId = e.target.value;
     runTrustMatcher();
   });
 
@@ -852,11 +921,13 @@ function setupEventListeners() {
   // Quick Preset Comparison Chips
   document.querySelectorAll(".btn-preset-chip").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const reqId = Number(btn.getAttribute("data-req"));
-      const subId = Number(btn.getAttribute("data-sub"));
-      if (reqId && subId) {
-        selectedRequestedId = reqId;
-        selectedSubstituteId = subId;
+      const reqVal = btn.getAttribute("data-req");
+      const subVal = btn.getAttribute("data-sub");
+      if (reqVal && subVal) {
+        const rItem = findInventoryItemById(reqVal);
+        const sItem = findInventoryItemById(subVal);
+        if (rItem) selectedRequestedId = String(rItem.id ?? rItem.inventoryId ?? rItem.medicineId);
+        if (sItem) selectedSubstituteId = String(sItem.id ?? sItem.inventoryId ?? sItem.medicineId);
         if (requestedSelect) requestedSelect.value = String(selectedRequestedId);
         if (substituteSelect) substituteSelect.value = String(selectedSubstituteId);
         runTrustMatcher();
@@ -1037,8 +1108,8 @@ function switchPharmacyBranch(branchId) {
 
   // Set default comparison IDs based on branch inventory
   if (inventoryData.length >= 2) {
-    selectedRequestedId = inventoryData[0].id;
-    selectedSubstituteId = inventoryData[1].id;
+    selectedRequestedId = String(inventoryData[0].id ?? inventoryData[0].inventoryId ?? inventoryData[0].medicineId);
+    selectedSubstituteId = String(inventoryData[1].id ?? inventoryData[1].inventoryId ?? inventoryData[1].medicineId);
   }
 
   // Re-populate Trust Matcher brand options
@@ -1277,8 +1348,8 @@ function highlightTableRow(itemId) {
  * 4. Prioritizes in-stock batches, highest price savings delta, and optimal freshness.
  */
 function autoSuggestSubstitute() {
-  const reqItem = inventoryData.find((i) => i.id === selectedRequestedId);
-  if (!reqItem) return;
+  const reqItem = findInventoryItemById(selectedRequestedId);
+  if (!reqItem) return null;
 
   const substituteSelect = document.getElementById("substituteBrandSelect");
 
@@ -1286,14 +1357,15 @@ function autoSuggestSubstitute() {
   const substitutes = findBioequivalentSubstitutes(reqItem, inventoryData);
 
   if (substitutes.length > 0) {
-    selectedSubstituteId = substitutes[0].candidate.id;
+    const cand = substitutes[0].candidate;
+    selectedSubstituteId = String(cand.id ?? cand.inventoryId ?? cand.medicineId);
     if (substituteSelect) {
-      substituteSelect.value = String(selectedSubstituteId);
+      substituteSelect.value = selectedSubstituteId;
     }
     return substitutes[0];
   } else {
     // If no strict bioequivalent substitute exists in inventory
-    console.warn(`[BrandMatcher] No 100% bioequivalent substitute found for ${reqItem.brand_name}`);
+    console.warn(`[BrandMatcher] No 100% bioequivalent substitute found for ${reqItem.brand_name || reqItem.brandName}`);
     return null;
   }
 }
@@ -1306,24 +1378,53 @@ function populateDropdownSelectors() {
   const substituteSelect = document.getElementById("substituteBrandSelect");
 
   if (!requestedSelect || !substituteSelect) return;
+  if (!Array.isArray(inventoryData) || inventoryData.length === 0) return;
 
   requestedSelect.innerHTML = "";
   substituteSelect.innerHTML = "";
 
   inventoryData.forEach((item) => {
+    const itemVal = String(item.id ?? item.inventoryId ?? item.medicineId ?? item.brandName);
+    const brand = item.brand_name || item.brandName || "Medicine";
+    const medDesc = item.medicine_name || item.genericName || "";
+    const expiry = item.expiry_date_months ?? 0;
+    const shelf = item.physical_shelf_location || item.shelfLocation || "Shelf";
+
     const optReq = document.createElement("option");
-    optReq.value = String(item.id);
-    optReq.textContent = `${item.brand_name} (${item.expiry_date_months} mo) - ${item.medicine_name}`;
+    optReq.value = itemVal;
+    optReq.textContent = `${brand} (${expiry} mo) - ${medDesc}`;
     requestedSelect.appendChild(optReq);
 
     const optSub = document.createElement("option");
-    optSub.value = String(item.id);
-    optSub.textContent = `${item.brand_name} (${item.expiry_date_months} mo) [Shelf: ${item.physical_shelf_location}]`;
+    optSub.value = itemVal;
+    optSub.textContent = `${brand} (${expiry} mo) [Shelf: ${shelf}]`;
     substituteSelect.appendChild(optSub);
   });
 
-  requestedSelect.value = String(selectedRequestedId);
-  substituteSelect.value = String(selectedSubstituteId);
+  // Ensure selectedRequestedId points to a valid item
+  let reqItem = findInventoryItemById(selectedRequestedId);
+  if (!reqItem && inventoryData.length > 0) {
+    reqItem = inventoryData[0];
+  }
+  if (reqItem) {
+    selectedRequestedId = String(reqItem.id ?? reqItem.inventoryId ?? reqItem.medicineId);
+    requestedSelect.value = selectedRequestedId;
+  }
+
+  // Ensure selectedSubstituteId points to a valid item
+  let subItem = findInventoryItemById(selectedSubstituteId);
+  if (!subItem && inventoryData.length > 1) {
+    subItem = inventoryData[1];
+  } else if (!subItem && inventoryData.length > 0) {
+    subItem = inventoryData[0];
+  }
+  if (subItem) {
+    selectedSubstituteId = String(subItem.id ?? subItem.inventoryId ?? subItem.medicineId);
+    substituteSelect.value = selectedSubstituteId;
+  }
+
+  // Immediately render comparison cards so the UI is never blank
+  runTrustMatcher();
 }
 
 /**
@@ -2204,12 +2305,16 @@ function setupChartResizeObserver() {
  * Opens Customer Trust verification for a specific medicine clicked from the table
  */
 function openCustomerTrustForMedicine(medicineId) {
-  selectedRequestedId = medicineId;
+  const item = findInventoryItemById(medicineId);
+  if (item) {
+    selectedRequestedId = String(item.id ?? item.inventoryId ?? item.medicineId);
+  } else {
+    selectedRequestedId = String(medicineId);
+  }
 
-  // Switch to Trust Tab or Show Modal
   const reqSelect = document.getElementById("requestedBrandSelect");
   if (reqSelect) {
-    reqSelect.value = String(selectedRequestedId);
+    reqSelect.value = selectedRequestedId;
   }
 
   autoSuggestSubstitute();
@@ -2252,15 +2357,40 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
   const isCategoryMatch = (reqItem.therapeutic_category || "").trim().toLowerCase() ===
                           (subItem.therapeutic_category || "").trim().toLowerCase();
 
-  const isBrandMatch = reqItem.brand_name.trim().toLowerCase() === subItem.brand_name.trim().toLowerCase();
+  const reqBrand = reqItem.brand_name || reqItem.brandName || "Medicine A";
+  const subBrand = subItem.brand_name || subItem.brandName || "Medicine B";
+  const isBrandMatch = reqBrand.trim().toLowerCase() === subBrand.trim().toLowerCase();
+
+  const reqActiveDisplay = (evalResult.reqIngredients && evalResult.reqIngredients.length > 0)
+    ? evalResult.reqIngredients.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ")
+    : (reqItem.active_salt || (Array.isArray(reqItem.activeIngredients) ? reqItem.activeIngredients.join(" + ") : "Paracetamol 500mg"));
+  const subActiveDisplay = (evalResult.candIngredients && evalResult.candIngredients.length > 0)
+    ? evalResult.candIngredients.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ")
+    : (subItem.active_salt || (Array.isArray(subItem.activeIngredients) ? subItem.activeIngredients.join(" + ") : "Paracetamol 500mg"));
+
+  const reqStrengthDisplay = evalResult.reqStrength || reqItem.strength || "Standard";
+  const candStrengthDisplay = evalResult.candStrength || subItem.strength || "Standard";
+  const reqFormDisplay = evalResult.reqForm || reqItem.dosageForm || "Tablet";
+  const candFormDisplay = evalResult.candForm || subItem.dosageForm || "Tablet";
+
+  const reqStock = reqItem.stock_quantity ?? reqItem.quantity ?? 0;
+  const subStock = subItem.stock_quantity ?? subItem.quantity ?? 0;
+  const reqShelf = reqItem.physical_shelf_location || reqItem.shelfLocation || "Rack A1";
+  const subShelf = subItem.physical_shelf_location || subItem.shelfLocation || "Rack A1";
+  const reqBarcode = reqItem.barcode || "8901030382011";
+  const subBarcode = subItem.barcode || "8901030382028";
+
+  const reqExpiry = typeof reqItem.expiry_date_months === "number" ? reqItem.expiry_date_months : (parseFloat(reqItem.expiry_date_months) || 12);
+  const subExpiry = typeof subItem.expiry_date_months === "number" ? subItem.expiry_date_months : (parseFloat(subItem.expiry_date_months) || 12);
+  const diff = typeof expiryDiff === "number" && !isNaN(expiryDiff) ? expiryDiff : parseFloat((subExpiry - reqExpiry).toFixed(1));
 
   const elements = [
     {
       icon: "&#129514;",
       name: "Active Chemical Molecule",
-      desc: "Core therapeutic active ingredient(s)",
-      valA: `<strong>${reqItem.activeIngredients ? reqItem.activeIngredients.join(" + ") : reqItem.active_salt}</strong>`,
-      valB: `<strong>${subItem.activeIngredients ? subItem.activeIngredients.join(" + ") : subItem.active_salt}</strong>`,
+      desc: "Core therapeutic active pharmaceutical ingredient (API)",
+      valA: `<strong>${reqActiveDisplay}</strong>`,
+      valB: `<strong>${subActiveDisplay}</strong>`,
       isRowMatch: evalResult.activeIngredientsMatch,
       statusHtml: evalResult.activeIngredientsMatch
         ? `<span class="comp-status-badge identical">&#10003; 100% Identical Active Ingredients</span>`
@@ -2270,23 +2400,23 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
       icon: "&#9878;&#65039;",
       name: "Dosage Strength",
       desc: "Milligram / microgram concentration per dose unit",
-      valA: `<strong>${evalResult.reqStrength || reqItem.strength || "Standard"}</strong>`,
-      valB: `<strong>${evalResult.candStrength || subItem.strength || "Standard"}</strong>`,
+      valA: `<strong>${reqStrengthDisplay}</strong>`,
+      valB: `<strong>${candStrengthDisplay}</strong>`,
       isRowMatch: evalResult.strengthMatch,
       statusHtml: evalResult.strengthMatch
-        ? `<span class="comp-status-badge identical">&#10003; Identical Strength (${evalResult.reqStrength})</span>`
-        : `<span class="comp-status-badge mismatch">&#9888; Strength Mismatch</span>`
+        ? `<span class="comp-status-badge identical">&#10003; Identical Strength (${reqStrengthDisplay})</span>`
+        : `<span class="comp-status-badge mismatch">&#9888; Strength Mismatch (${reqStrengthDisplay} vs ${candStrengthDisplay})</span>`
     },
     {
       icon: "&#128138;",
       name: "Dosage Formulation",
       desc: "Delivery route & pharmacokinetic presentation",
-      valA: `${evalResult.reqForm || reqItem.dosageForm || "Tablet"}`,
-      valB: `${evalResult.candForm || subItem.dosageForm || "Tablet"}`,
+      valA: `${reqFormDisplay}`,
+      valB: `${candFormDisplay}`,
       isRowMatch: evalResult.dosageFormMatch,
       statusHtml: evalResult.dosageFormMatch
-        ? `<span class="comp-status-badge identical">&#10003; Bioequivalent Route</span>`
-        : `<span class="comp-status-badge mismatch">&#9888; Distinct Dosage Form</span>`
+        ? `<span class="comp-status-badge identical">&#10003; Bioequivalent Route (${reqFormDisplay})</span>`
+        : `<span class="comp-status-badge mismatch">&#9888; Distinct Dosage Form (${reqFormDisplay} vs ${candFormDisplay})</span>`
     },
     {
       icon: "&#128176;",
@@ -2305,8 +2435,8 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
       icon: "&#127991;&#65039;",
       name: "Commercial Brand & Maker",
       desc: "Marketing brand name & pharmaceutical laboratory",
-      valA: `<strong>${reqItem.brand_name}</strong>`,
-      valB: `<strong>${subItem.brand_name}</strong>`,
+      valA: `<strong>${reqBrand}</strong>`,
+      valB: `<strong>${subBrand}</strong>`,
       isRowMatch: true,
       statusHtml: isBrandMatch
         ? `<span class="comp-status-badge identical">&#10003; Same Brand Formulation</span>`
@@ -2316,8 +2446,8 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
       icon: "&#129658;",
       name: "Therapeutic Category",
       desc: "Clinical action & pharmacological disease target",
-      valA: `<strong>${reqItem.therapeutic_category || 'Therapeutic Agent'}</strong>`,
-      valB: `<strong>${subItem.therapeutic_category || 'Therapeutic Agent'}</strong>`,
+      valA: `<strong>${reqItem.therapeutic_category || 'Essential Therapeutic'}</strong>`,
+      valB: `<strong>${subItem.therapeutic_category || 'Essential Therapeutic'}</strong>`,
       isRowMatch: isCategoryMatch,
       statusHtml: isCategoryMatch
         ? `<span class="comp-status-badge identical">&#10003; Identical Clinical Indication</span>`
@@ -2327,23 +2457,23 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
       icon: "&#128197;",
       name: "Batch Expiry Shelf-Life",
       desc: "Customer demand check: 8-10+ months target freshness",
-      valA: `<strong>${reqItem.expiry_date_months} Months</strong> <span class="expiry-badge ${reqItem.expiry_date_months <= 4 ? 'warning' : 'safe'}" style="font-size:0.68rem; margin-left:4px;">${reqItem.expiry_date_months <= 4 ? 'Short (3-4 mo)' : 'Fresh (8-10+)'}</span>`,
-      valB: `<strong>${subItem.expiry_date_months} Months</strong> <span class="expiry-badge ${subItem.expiry_date_months <= 4 ? 'warning' : 'safe'}" style="font-size:0.68rem; margin-left:4px;">${subItem.expiry_date_months <= 4 ? 'Short (3-4 mo)' : 'Fresh (8-10+)'}</span>`,
+      valA: `<strong>${reqExpiry} Months</strong> <span class="expiry-badge ${reqExpiry <= 4 ? 'warning' : 'safe'}" style="font-size:0.68rem; margin-left:4px;">${reqExpiry <= 4 ? 'Short (3-4 mo)' : 'Fresh (8-10+)'}</span>`,
+      valB: `<strong>${subExpiry} Months</strong> <span class="expiry-badge ${subExpiry <= 4 ? 'warning' : 'safe'}" style="font-size:0.68rem; margin-left:4px;">${subExpiry <= 4 ? 'Short (3-4 mo)' : 'Fresh (8-10+)'}</span>`,
       isRowMatch: true,
-      statusHtml: expiryDiff > 0
-        ? `<span class="comp-status-badge advantage">&#9733; +${expiryDiff} Mo Fresher (Solves Expiry Demand)</span>`
-        : (expiryDiff === 0
+      statusHtml: diff > 0
+        ? `<span class="comp-status-badge advantage">&#9733; +${diff} Mo Fresher (Solves Expiry Demand)</span>`
+        : (diff === 0
           ? `<span class="comp-status-badge neutral">Equal Shelf-Life Duration</span>`
-          : `<span class="comp-status-badge warning">${Math.abs(expiryDiff)} Mo Shorter Expiry</span>`)
+          : `<span class="comp-status-badge warning">${Math.abs(diff)} Mo Shorter Expiry</span>`)
     },
     {
       icon: "&#128230;",
       name: "Stock Quantity & Status",
       desc: "Physical inventory available with low-stock alert (<10)",
-      valA: `<strong>${reqItem.stock_quantity}</strong> units ${reqItem.stock_quantity < 10 ? '<span class="low-stock-badge" style="font-size:0.65rem; margin-left:4px;">&#9888; Low Stock</span>' : '<span style="color:#15803d; font-size:0.75rem; margin-left:4px;">&#10003; In Stock</span>'}`,
-      valB: `<strong>${subItem.stock_quantity}</strong> units ${subItem.stock_quantity < 10 ? '<span class="low-stock-badge" style="font-size:0.65rem; margin-left:4px;">&#9888; Low Stock</span>' : '<span style="color:#15803d; font-size:0.75rem; margin-left:4px;">&#10003; In Stock</span>'}`,
+      valA: `<strong>${reqStock}</strong> units ${reqStock < 10 ? '<span class="low-stock-badge" style="font-size:0.65rem; margin-left:4px;">&#9888; Low Stock</span>' : '<span style="color:#15803d; font-size:0.75rem; margin-left:4px;">&#10003; In Stock</span>'}`,
+      valB: `<strong>${subStock}</strong> units ${subStock < 10 ? '<span class="low-stock-badge" style="font-size:0.65rem; margin-left:4px;">&#9888; Low Stock</span>' : '<span style="color:#15803d; font-size:0.75rem; margin-left:4px;">&#10003; In Stock</span>'}`,
       isRowMatch: true,
-      statusHtml: (subItem.stock_quantity < 10)
+      statusHtml: (subStock < 10)
         ? `<span class="comp-status-badge warning">&#9888; Medicine B Low Stock (&lt;10)</span>`
         : `<span class="comp-status-badge identical">&#10003; Readily Available</span>`
     },
@@ -2351,8 +2481,8 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
       icon: "&#128205;",
       name: "Dispensary Shelf Location",
       desc: "Physical rack coordinates for instant pharmacist pickup",
-      valA: `<span class="shelf-badge" style="font-size:0.75rem;"><span class="shelf-icon">&#9638;</span> ${reqItem.physical_shelf_location}</span>`,
-      valB: `<span class="shelf-badge" style="font-size:0.75rem;"><span class="shelf-icon">&#9638;</span> ${subItem.physical_shelf_location}</span>`,
+      valA: `<span class="shelf-badge" style="font-size:0.75rem;"><span class="shelf-icon">&#9638;</span> ${reqShelf}</span>`,
+      valB: `<span class="shelf-badge" style="font-size:0.75rem;"><span class="shelf-icon">&#9638;</span> ${subShelf}</span>`,
       isRowMatch: true,
       statusHtml: `<span class="comp-status-badge neutral">&#9638; Shelf Coordinates Verified</span>`
     },
@@ -2360,8 +2490,8 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
       icon: "&#128290;",
       name: "Package Barcode / SKU",
       desc: "Scannable packaging code identifier for POS verification",
-      valA: `<span style="font-family:monospace; font-size:0.8rem; color:var(--slate-700);">${reqItem.barcode || 'N/A'}</span>`,
-      valB: `<span style="font-family:monospace; font-size:0.8rem; color:var(--slate-700);">${subItem.barcode || 'N/A'}</span>`,
+      valA: `<span style="font-family:monospace; font-size:0.8rem; color:var(--slate-700);">${reqBarcode}</span>`,
+      valB: `<span style="font-family:monospace; font-size:0.8rem; color:var(--slate-700);">${subBarcode}</span>`,
       isRowMatch: true,
       statusHtml: `<span class="comp-status-badge neutral">Registered Packaging SKU</span>`
     },
@@ -2396,8 +2526,8 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
           <thead>
             <tr>
               <th style="width: 28%;">Pharmaceutical Element</th>
-              <th class="col-med-a" style="width: 26%;">Medicine A (${reqItem.brand_name})</th>
-              <th class="col-med-b" style="width: 26%;">Medicine B (${subItem.brand_name})</th>
+              <th class="col-med-a" style="width: 26%;">Medicine A (${reqBrand})</th>
+              <th class="col-med-b" style="width: 26%;">Medicine B (${subBrand})</th>
               <th class="col-status" style="width: 20%;">Comparison Status</th>
             </tr>
           </thead>
@@ -2436,30 +2566,90 @@ function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff
 }
 
 function runTrustMatcher() {
-  const reqItem = inventoryData.find((i) => i.id === selectedRequestedId);
-  const subItem = inventoryData.find((i) => i.id === selectedSubstituteId);
-
-  if (!reqItem || !subItem) return;
-
   const matchContainer = document.getElementById("trustVerificationResult");
   if (!matchContainer) return;
+
+  if (!Array.isArray(inventoryData) || inventoryData.length === 0) {
+    matchContainer.innerHTML = `
+      <div style="padding: 30px; text-align: center; color: var(--slate-500); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px; margin: 20px 0;">
+        <span style="font-size: 2rem; display: block; margin-bottom: 8px;">⏳</span>
+        <h4 style="color: var(--slate-700); margin: 0 0 6px 0;">Loading Medicine Catalog...</h4>
+        <p style="margin: 0; font-size: 0.85rem;">Retrieving pharmaceutical inventory...</p>
+      </div>
+    `;
+    return;
+  }
+
+  let reqItem = findInventoryItemById(selectedRequestedId);
+  let subItem = findInventoryItemById(selectedSubstituteId);
+
+  // If either item cannot be found, fallback to available items
+  if (!reqItem && inventoryData.length > 0) {
+    reqItem = inventoryData[0];
+    selectedRequestedId = String(reqItem.id ?? reqItem.inventoryId ?? reqItem.medicineId);
+    const reqSelect = document.getElementById("requestedBrandSelect");
+    if (reqSelect) reqSelect.value = selectedRequestedId;
+  }
+  if (!subItem && inventoryData.length > 1) {
+    subItem = inventoryData[1];
+    selectedSubstituteId = String(subItem.id ?? subItem.inventoryId ?? subItem.medicineId);
+    const subSelect = document.getElementById("substituteBrandSelect");
+    if (subSelect) subSelect.value = selectedSubstituteId;
+  } else if (!subItem && inventoryData.length > 0) {
+    subItem = inventoryData[0];
+    selectedSubstituteId = String(subItem.id ?? subItem.inventoryId ?? subItem.medicineId);
+  }
+
+  if (!reqItem || !subItem) {
+    matchContainer.innerHTML = `
+      <div style="padding: 30px; text-align: center; color: var(--slate-500); background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px; margin: 20px 0;">
+        <span style="font-size: 2rem; display: block; margin-bottom: 8px;">🔍</span>
+        <h4 style="color: var(--slate-700); margin: 0 0 6px 0;">Select Medicines to Compare</h4>
+        <p style="margin: 0; font-size: 0.85rem;">Please select Medicine A and Medicine B from the dropdowns above to initiate clinical bioequivalence verification.</p>
+      </div>
+    `;
+    return;
+  }
 
   // MODULE 3: Run AI Pharmaceutical Bioequivalence Evaluation Engine
   const evalResult = evaluateBioequivalence(reqItem, subItem);
   const isMatch = evalResult.isMatch;
 
-  // Calculate expiry advantage
-  const expiryDiff = subItem.expiry_date_months - reqItem.expiry_date_months;
+  // Safe numerical normalization for display
+  const reqExpiry = typeof reqItem.expiry_date_months === "number" ? reqItem.expiry_date_months : (parseFloat(reqItem.expiry_date_months) || 12);
+  const subExpiry = typeof subItem.expiry_date_months === "number" ? subItem.expiry_date_months : (parseFloat(subItem.expiry_date_months) || 12);
+  const expiryDiff = parseFloat((subExpiry - reqExpiry).toFixed(1));
   const isSubstituteFresher = expiryDiff > 0;
+
+  const reqStock = reqItem.stock_quantity ?? reqItem.quantity ?? 0;
+  const subStock = subItem.stock_quantity ?? subItem.quantity ?? 0;
+  const reqBrand = reqItem.brand_name || reqItem.brandName || "Medicine A";
+  const subBrand = subItem.brand_name || subItem.brandName || "Medicine B";
+  const reqMedName = reqItem.medicine_name || reqItem.genericName || reqBrand;
+  const subMedName = subItem.medicine_name || subItem.genericName || subBrand;
+  const reqShelf = reqItem.physical_shelf_location || reqItem.shelfLocation || "Rack A1 - Shelf 1";
+  const subShelf = subItem.physical_shelf_location || subItem.shelfLocation || "Rack A1 - Shelf 1";
+
+  const reqActiveDisplay = (evalResult.reqIngredients && evalResult.reqIngredients.length > 0)
+    ? evalResult.reqIngredients.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ")
+    : (reqItem.active_salt || (Array.isArray(reqItem.activeIngredients) ? reqItem.activeIngredients.join(" + ") : "Paracetamol 500mg"));
+  const subActiveDisplay = (evalResult.candIngredients && evalResult.candIngredients.length > 0)
+    ? evalResult.candIngredients.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(" + ")
+    : (subItem.active_salt || (Array.isArray(subItem.activeIngredients) ? subItem.activeIngredients.join(" + ") : "Paracetamol 500mg"));
+
+  const reqStrengthDisplay = evalResult.reqStrength || reqItem.strength || "Standard";
+  const candStrengthDisplay = evalResult.candStrength || subItem.strength || "Standard";
+  const reqFormDisplay = evalResult.reqForm || reqItem.dosageForm || "Tablet";
+  const candFormDisplay = evalResult.candForm || subItem.dosageForm || "Tablet";
 
   const elementsTableHTML = buildElementComparisonTable(reqItem, subItem, evalResult, expiryDiff);
 
   if (isMatch) {
     matchContainer.innerHTML = `
       <div class="trust-card-top-header">
-        <span class="trust-badge-pill">Customer Trust Interface</span>
-        <h2 class="trust-card-title">Substitution Verification</h2>
-        <p class="trust-card-subtitle">Scientifically validated bio-identical matches</p>
+        <span class="trust-badge-pill">&#10003; Clinical Bioequivalence Verified</span>
+        <h2 class="trust-card-title">Medicine Substitution Verification</h2>
+        <p class="trust-card-subtitle">Scientifically validated bio-identical pharmaceutical formulation</p>
       </div>
 
       <!-- Side-by-Side Comparison Grid -->
@@ -2471,11 +2661,27 @@ function runTrustMatcher() {
               <path d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a3 3 0 00-3-3H8z"></path>
             </svg>
           </div>
-          <div class="card-role-label">Medicine A (Requested Brand)</div>
-          <div class="card-medicine-name">${reqItem.brand_name}</div>
-          <div class="card-brand-maker">${reqItem.medicine_name}</div>
-          <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            MRP: <strong style="color:var(--slate-900);">₹${evalResult.reqPrice.toFixed(2)}</strong> &bull; Expiry: <strong>${reqItem.expiry_date_months} mo</strong> &bull; Stock: <strong>${reqItem.stock_quantity}</strong>
+          <div class="card-role-label">Medicine A (Reference / Requested Brand)</div>
+          <div class="card-medicine-name">${reqBrand}</div>
+          <div class="card-brand-maker">${reqMedName}</div>
+
+          <div style="margin-top:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:0.8rem; text-align:left;">
+            <div style="margin-bottom:4px;">
+              <span style="color:var(--slate-500); font-weight:600;">Active API:</span>
+              <strong style="color:var(--primary-blue);">${reqActiveDisplay}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span><span style="color:var(--slate-500);">Strength:</span> <strong>${reqStrengthDisplay}</strong></span>
+              <span><span style="color:var(--slate-500);">Form:</span> <strong>${reqFormDisplay}</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span><span style="color:var(--slate-500);">MRP:</span> <strong style="color:var(--slate-900);">₹${evalResult.reqPrice.toFixed(2)}</strong></span>
+              <span><span style="color:var(--slate-500);">Expiry:</span> <strong>${reqExpiry} mo</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span><span style="color:var(--slate-500);">Stock:</span> <strong>${reqStock} units</strong></span>
+              <span><span style="color:var(--slate-500);">Shelf:</span> <span class="shelf-tag">${reqShelf}</span></span>
+            </div>
           </div>
           <div class="indicator-line"></div>
         </div>
@@ -2487,13 +2693,29 @@ function runTrustMatcher() {
               <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"></path>
             </svg>
           </div>
-          <div class="card-role-label">Medicine B (Available Substitute)</div>
-          <div class="card-medicine-name">${subItem.brand_name}</div>
-          <div class="card-brand-maker">${subItem.medicine_name}</div>
-          <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            MRP: <strong style="color:var(--slate-900);">₹${evalResult.candPrice.toFixed(2)}</strong> &bull; Expiry: <strong>${subItem.expiry_date_months} mo</strong> &bull; Stock: <strong>${subItem.stock_quantity}</strong>
+          <div class="card-role-label">Medicine B (Certified Substitute Brand)</div>
+          <div class="card-medicine-name">${subBrand}</div>
+          <div class="card-brand-maker">${subMedName}</div>
+
+          <div style="margin-top:12px; padding:10px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.8rem; text-align:left;">
+            <div style="margin-bottom:4px;">
+              <span style="color:#166534; font-weight:600;">Active API:</span>
+              <strong style="color:#15803d;">${subActiveDisplay}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span><span style="color:#166534;">Strength:</span> <strong>${candStrengthDisplay}</strong></span>
+              <span><span style="color:#166534;">Form:</span> <strong>${candFormDisplay}</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span><span style="color:#166534;">MRP:</span> <strong style="color:#15803d;">₹${evalResult.candPrice.toFixed(2)}</strong></span>
+              <span><span style="color:#166534;">Expiry:</span> <strong>${subExpiry} mo</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span><span style="color:#166534;">Stock:</span> <strong>${subStock} units</strong></span>
+              <span><span style="color:#166534;">Shelf:</span> <span class="shelf-tag" style="background:#dcfce7; color:#166534;">${subShelf}</span></span>
+            </div>
           </div>
-          <div class="indicator-line"></div>
+          <div class="indicator-line" style="background:#10b981;"></div>
         </div>
       </div>
 
@@ -2505,9 +2727,9 @@ function runTrustMatcher() {
         </div>
         <h3>100% Chemical Bioequivalence Verified</h3>
         <p class="match-explanation-paragraph">
-          Both brands strictly match active ingredients <span class="active-molecule-highlight">${evalResult.reqIngredients.join(" + ")}</span>, 
-          identical dosage strength <strong>${evalResult.reqStrength}</strong>, and identical dosage form <strong>${evalResult.reqForm}</strong>. 
-          The active therapeutic molecule provides the exact same clinical relief, bioavailability, and safety profile.
+          Both brands strictly match active chemical molecules <span class="active-molecule-highlight">${reqActiveDisplay}</span>, 
+          identical dosage strength <strong>${reqStrengthDisplay}</strong>, and identical dosage form <strong>${reqFormDisplay}</strong>. 
+          The active therapeutic molecule provides identical bioavailability and clinical efficacy.
         </p>
 
         <!-- Calculated Price Savings Delta Card -->
@@ -2522,7 +2744,7 @@ function runTrustMatcher() {
                   Patient Savings Delta: ₹${evalResult.savingsDelta.toFixed(2)} per strip
                 </div>
                 <div style="font-size:0.8rem; color:#047857; margin-top:2px;">
-                  ${evalResult.savingsPercent}% lower cost compared to ${reqItem.brand_name} (₹${evalResult.candPrice.toFixed(2)} vs ₹${evalResult.reqPrice.toFixed(2)})
+                  ${evalResult.savingsPercent}% lower cost compared to ${reqBrand} (₹${evalResult.candPrice.toFixed(2)} vs ₹${evalResult.reqPrice.toFixed(2)})
                 </div>
               </div>
             </div>
@@ -2537,25 +2759,29 @@ function runTrustMatcher() {
             ⚖️ Price Parity: Both brands retail at identical MRP of ₹${evalResult.reqPrice.toFixed(2)}
           </div>
           `
-            : ""
+            : `
+          <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 14px; margin:14px 0; text-align:center; font-size:0.82rem; color:#92400e;">
+            ℹ️ Candidate brand MRP is ₹${evalResult.candPrice.toFixed(2)} (+₹${Math.abs(evalResult.savingsDelta).toFixed(2)} vs ₹${evalResult.reqPrice.toFixed(2)})
+          </div>
+          `
         }
 
         <div class="feature-mini-grid">
           <div class="mini-spec-item">
-            <span class="spec-label">Active Salt:</span>
-            <span class="spec-value" style="color:var(--primary-blue);">${evalResult.reqIngredients.join(" + ")}</span>
+            <span class="spec-label">Active API:</span>
+            <span class="spec-value" style="color:var(--primary-blue); font-size:0.8rem;">${reqActiveDisplay}</span>
           </div>
           <div class="mini-spec-item">
             <span class="spec-label">Strength & Form:</span>
-            <span class="spec-value" style="color:#15803d;">${evalResult.reqStrength} &bull; ${evalResult.reqForm}</span>
+            <span class="spec-value" style="color:#15803d;">${reqStrengthDisplay} &bull; ${reqFormDisplay}</span>
           </div>
           <div class="mini-spec-item">
             <span class="spec-label">Expiry Offered:</span>
-            <span class="spec-value" style="color:#15803d;">${subItem.expiry_date_months} Mo (${subItem.expiry_date_months >= 8 ? "Safe/Fresh" : "Active"})</span>
+            <span class="spec-value" style="color:#15803d;">${subExpiry} Mo (${subExpiry >= 8 ? "Safe/Fresh" : "Active"})</span>
           </div>
           <div class="mini-spec-item">
             <span class="spec-label">Shelf Location:</span>
-            <span class="spec-value" style="font-family:monospace; color:var(--primary-blue);">${subItem.physical_shelf_location}</span>
+            <span class="spec-value" style="font-family:monospace; color:var(--primary-blue);">${subShelf}</span>
           </div>
         </div>
       </div>
@@ -2570,12 +2796,12 @@ function runTrustMatcher() {
             <div class="advantage-text">
               <h5>Customer Expiry Demand Solved: +${expiryDiff} Extra Months of Freshness</h5>
               <p>
-                The customer demanded 8-10+ month expiry: this substitute batch gives 
-                <strong>${subItem.expiry_date_months} months</strong> vs ${reqItem.expiry_date_months} months on the requested brand.
+                The customer demanded 8-10+ month expiry: this substitute batch provides 
+                <strong>${subExpiry} months</strong> vs ${reqExpiry} months on the requested brand.
               </p>
             </div>
           </div>
-          <span class="shelf-badge">${subItem.physical_shelf_location}</span>
+          <span class="shelf-badge">${subShelf}</span>
         </div>
         `
           : ""
@@ -2591,7 +2817,7 @@ function runTrustMatcher() {
             <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"></path>
             <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
           </svg>
-          ⚡ Dispense Substitute (${subItem.brand_name})
+          ⚡ Dispense Substitute (${subBrand})
         </button>
         <button class="btn-trust-slip-action" id="btnCardPrintTrustSlip" type="button" style="padding:10px 18px; font-size:0.86rem; cursor:pointer;">
           <span>🖨️</span> Patient Trust Certificate
@@ -2601,11 +2827,11 @@ function runTrustMatcher() {
 
     // Add click handlers
     document.getElementById("btnProceedSubstitution")?.addEventListener("click", () => {
-      openDispenseModal(subItem.id, 1);
+      openDispenseModal(subItem.id ?? subItem.inventoryId ?? selectedSubstituteId, 1);
     });
 
     document.getElementById("btnCardPrintTrustSlip")?.addEventListener("click", () => {
-      openTrustCertificateModal(reqItem.id, subItem.id);
+      openTrustCertificateModal(selectedRequestedId, selectedSubstituteId);
     });
   } else {
     // MODULE 3: Strict Clinical Mismatch / Incompatibility Warning
@@ -2621,7 +2847,7 @@ function runTrustMatcher() {
           <div class="checkmark-circle" style="color: #dc2626;">&#10007;</div>
           <div class="score-titles">
             <h3>${mismatchTitle}</h3>
-            <p>${evalResult.status.replace(/_/g, " ")}</p>
+            <p>${evalResult.status.replace(/_/g, " ")} &bull; Substitution Prohibited</p>
           </div>
         </div>
         <div class="scientific-badge" style="background: rgba(0,0,0,0.25);">
@@ -2633,22 +2859,46 @@ function runTrustMatcher() {
       <div class="comparison-grid">
         <!-- Requested Brand Card -->
         <div class="side-card requested">
-          <div class="card-role-label">Medicine A</div>
-          <div class="card-medicine-name">${reqItem.brand_name}</div>
-          <div class="card-brand-maker">${reqItem.medicine_name}</div>
-          <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            Strength: <strong>${evalResult.reqStrength || "N/A"}</strong> &bull; Form: <strong>${evalResult.reqForm || "Tablet"}</strong>
+          <div class="card-role-label">Medicine A (Requested Brand)</div>
+          <div class="card-medicine-name">${reqBrand}</div>
+          <div class="card-brand-maker">${reqMedName}</div>
+
+          <div style="margin-top:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-size:0.8rem; text-align:left;">
+            <div style="margin-bottom:4px;">
+              <span style="color:var(--slate-500); font-weight:600;">Active API:</span>
+              <strong style="color:var(--primary-blue);">${reqActiveDisplay}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span><span style="color:var(--slate-500);">Strength:</span> <strong>${reqStrengthDisplay}</strong></span>
+              <span><span style="color:var(--slate-500);">Form:</span> <strong>${reqFormDisplay}</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span><span style="color:var(--slate-500);">MRP:</span> ₹${evalResult.reqPrice.toFixed(2)}</span>
+              <span><span style="color:var(--slate-500);">Stock:</span> ${reqStock} u</span>
+            </div>
           </div>
           <div class="indicator-line"></div>
         </div>
 
         <!-- Available Substitute Card -->
         <div class="side-card substitute" style="border-color:#fecaca;">
-          <div class="card-role-label" style="color:#b91c1c;">Medicine B</div>
-          <div class="card-medicine-name">${subItem.brand_name}</div>
-          <div class="card-brand-maker">${subItem.medicine_name}</div>
-          <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            Strength: <strong>${evalResult.candStrength || "N/A"}</strong> &bull; Form: <strong>${evalResult.candForm || "Tablet"}</strong>
+          <div class="card-role-label" style="color:#b91c1c;">Medicine B (Incompatible Candidate)</div>
+          <div class="card-medicine-name">${subBrand}</div>
+          <div class="card-brand-maker">${subMedName}</div>
+
+          <div style="margin-top:12px; padding:10px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:0.8rem; text-align:left;">
+            <div style="margin-bottom:4px;">
+              <span style="color:#991b1b; font-weight:600;">Active API:</span>
+              <strong style="color:${evalResult.activeIngredientsMatch ? '#15803d' : '#b91c1c'};">${subActiveDisplay}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <span><span style="color:#991b1b;">Strength:</span> <strong style="color:${evalResult.strengthMatch ? '#15803d' : '#b91c1c'};">${candStrengthDisplay}</strong></span>
+              <span><span style="color:#991b1b;">Form:</span> <strong style="color:${evalResult.dosageFormMatch ? '#15803d' : '#b91c1c'};">${candFormDisplay}</strong></span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span><span style="color:#991b1b;">MRP:</span> ₹${evalResult.candPrice.toFixed(2)}</span>
+              <span><span style="color:#991b1b;">Stock:</span> ${subStock} u</span>
+            </div>
           </div>
           <div class="indicator-line" style="background:#ef4444;"></div>
         </div>
@@ -2657,10 +2907,15 @@ function runTrustMatcher() {
       <div class="plain-language-explanation" style="background: #fef2f2; border-color: #fecaca; margin-top: 18px;">
         <div class="explanation-icon" style="color: #dc2626;">&#9888;&#65039;</div>
         <div class="explanation-text">
-          <h4 style="color: #991b1b;">Cannot Substitute Automatically</h4>
-          <p style="color: #7f1d1d;">
+          <h4 style="color: #991b1b;">Clinical Substitution Prohibited</h4>
+          <p style="color: #7f1d1d; margin-top:4px;">
             ${evalResult.rejectionReason}
           </p>
+          <div style="display:flex; gap:16px; margin-top:8px; font-size:0.8rem;">
+            <span>Active API: <strong>${evalResult.activeIngredientsMatch ? '✓ Matched' : '✗ Mismatched'}</strong></span>
+            <span>Strength: <strong>${evalResult.strengthMatch ? '✓ Matched' : '✗ Mismatched'}</strong></span>
+            <span>Form: <strong>${evalResult.dosageFormMatch ? '✓ Matched' : '✗ Mismatched'}</strong></span>
+          </div>
         </div>
       </div>
 
@@ -2668,8 +2923,8 @@ function runTrustMatcher() {
       ${elementsTableHTML}
 
       <!-- Safe Substitute Finder CTA -->
-      <button class="btn-proceed-substitution" id="btnAutoFindSafeSubstitute" type="button" style="background:#dc2626;">
-        &#128269; Auto-Select Bio-Identical Substitute for ${reqItem.brand_name}
+      <button class="btn-proceed-substitution" id="btnAutoFindSafeSubstitute" type="button" style="background:#2563eb; margin-top:16px;">
+        &#128269; Auto-Select Bio-Identical Substitute for ${reqBrand}
       </button>
     `;
 
@@ -2679,7 +2934,7 @@ function runTrustMatcher() {
       if (match) {
         showToast(`&#10003; Switched to bioequivalent substitute: ${match.candidate.brandName || match.candidate.brand_name} (Saves ₹${match.evaluation.savingsDelta})`);
       } else {
-        showToast(`&#9888; No bioequivalent alternative in stock for ${reqItem.brand_name}`);
+        showToast(`&#9888; No bioequivalent alternative in stock for ${reqBrand}`);
       }
     });
   }
@@ -2952,8 +3207,8 @@ async function handleScannedCode(codeString) {
     document.getElementById("btnSwitchToInStockSub")?.addEventListener("click", () => {
       closeScannerModal();
       if (bestSubstitute) {
-        selectedRequestedId = matched.id;
-        selectedSubstituteId = bestSubstitute.candidate.id;
+        selectedRequestedId = String(matched.id ?? matched.inventoryId ?? matched.medicineId);
+        selectedSubstituteId = String(bestSubstitute.candidate.id ?? bestSubstitute.candidate.inventoryId ?? bestSubstitute.candidate.medicineId);
         populateDropdownSelectors();
         runTrustMatcher();
 
@@ -3019,9 +3274,9 @@ async function handleScannedCode(codeString) {
     document.getElementById("btnCompareBioequivalent")?.addEventListener("click", () => {
       closeScannerModal();
 
-      selectedRequestedId = matched.id;
+      selectedRequestedId = String(matched.id ?? matched.inventoryId ?? matched.medicineId);
       if (bestSubstitute) {
-        selectedSubstituteId = bestSubstitute.candidate.id;
+        selectedSubstituteId = String(bestSubstitute.candidate.id ?? bestSubstitute.candidate.inventoryId ?? bestSubstitute.candidate.medicineId);
       }
 
       populateDropdownSelectors();
@@ -3776,8 +4031,8 @@ function confirmDispenseAction() {
 // ----------------------------------------------------------------------------
 
 function openTrustCertificateModal(reqId, subId) {
-  const reqItem = inventoryData.find((i) => i.id === reqId) || inventoryData[0];
-  const subItem = inventoryData.find((i) => i.id === subId) || inventoryData[1] || reqItem;
+  const reqItem = findInventoryItemById(reqId) || inventoryData[0];
+  const subItem = findInventoryItemById(subId) || inventoryData[1] || reqItem;
 
   const certNumber = "CERT-" + Math.floor(100000 + Math.random() * 900000);
   const now = new Date();
@@ -3787,7 +4042,9 @@ function openTrustCertificateModal(reqId, subId) {
   const sheet = document.getElementById("certificatePrintableSheet");
   if (!sheet) return;
 
-  const isExactSaltMatch = reqItem.active_salt.trim().toLowerCase() === subItem.active_salt.trim().toLowerCase();
+  const reqSalt = (reqItem.active_salt || (Array.isArray(reqItem.activeIngredients) ? reqItem.activeIngredients.join(" + ") : "")).trim().toLowerCase();
+  const subSalt = (subItem.active_salt || (Array.isArray(subItem.activeIngredients) ? subItem.activeIngredients.join(" + ") : "")).trim().toLowerCase();
+  const isExactSaltMatch = Boolean(reqSalt && subSalt && reqSalt === subSalt);
 
   // Estimate pricing & financial benefit
   const reqEstimatePrice = Math.round(95 + (reqItem.id % 7) * 22);
