@@ -3,50 +3,92 @@ service cloud.firestore {
   match /databases/{database}/documents {
     
     // ========================================================================
-    // PharmaTrust - Security Rules for "PharmaInventory" Collection
-    // ========================================================================
-    // Updated Schema:
-    //  - name / drugName / medicine_name (string, non-empty, <= 150 chars)
-    //  - stockLevel / stock_quantity (int/number, >= 0)
-    //  - activeMolecule / api / active_salt (string)
-    //  - expiry / expiryDate / expiry_date_months (string or number)
-    //  - qrCodeData (string, unique batch matrix string, <= 200 chars)
-    //  - shelfLocation / physical_shelf_location (string, <= 100 chars)
+    // PharmaTrust - Healthcare Clinical Security Rules
+    // Collections: Medicines, Inventory, Users, AuditLogs, PharmaInventory
     // ========================================================================
 
-    match /PharmaInventory/{medicationId} {
-      // 1. READ: Dispensary dashboards and terminals can stream live inventory
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Validation for Medicines document schema
+    // Fields: medicineId, brandName, genericName, activeIngredients (array), strength, dosageForm, manufacturer
+    function isValidMedicine(data) {
+      return data.medicineId is string &&
+             data.brandName is string && data.brandName.size() > 0 &&
+             data.genericName is string &&
+             data.activeIngredients is list && data.activeIngredients.size() > 0 &&
+             data.strength is string &&
+             data.dosageForm is string &&
+             data.manufacturer is string;
+    }
+
+    // Validation for Inventory document schema
+    // Fields: inventoryId, medicineId, branchId, batchNumber, quantity, expiryDate, updatedAt
+    function isValidInventory(data) {
+      return data.inventoryId is string &&
+             data.medicineId is string &&
+             data.branchId is string &&
+             data.batchNumber is string &&
+             (data.quantity is int || data.quantity is number) &&
+             data.quantity >= 0 &&
+             data.expiryDate is string;
+    }
+
+    // Validation for Users document schema
+    // Fields: userId, role, branchId, status
+    function isValidUser(data) {
+      return data.userId is string &&
+             data.role is string &&
+             data.branchId is string &&
+             (data.status == 'active' || data.status == 'inactive');
+    }
+
+    // Validation for Audit Logs document schema
+    // Fields: eventId, actorId, action, recordId, timestamp, details
+    function isValidAuditLog(data) {
+      return data.eventId is string &&
+             data.actorId is string &&
+             data.action is string &&
+             data.recordId is string;
+    }
+
+    // 1. Medicines Collection
+    match /Medicines/{medicineId} {
       allow read: if true;
+      allow create, update: if isValidMedicine(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
 
-      // 2. CREATE & UPDATE: Validate pharmaceutical document schema & qrCodeData
-      allow create, update: if 
-        // Drug name validation
-        ((request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 150) ||
-         (request.resource.data.drugName is string && request.resource.data.drugName.size() > 0 && request.resource.data.drugName.size() <= 150) ||
-         (request.resource.data.medicine_name is string && request.resource.data.medicine_name.size() > 0)) &&
+    // 2. Inventory Collection
+    match /Inventory/{inventoryId} {
+      allow read: if true;
+      allow create, update: if isValidInventory(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
 
-        // Stock level validation (non-negative)
-        (((request.resource.data.stockLevel is int || request.resource.data.stockLevel is number) && request.resource.data.stockLevel >= 0) ||
-         ((request.resource.data.stock_quantity is int || request.resource.data.stock_quantity is number) && request.resource.data.stock_quantity >= 0)) &&
+    // 3. Users Collection
+    match /Users/{userId} {
+      allow read: if true;
+      allow create, update: if isValidUser(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
 
-        // Active Molecule / API / Active Salt string
-        (request.resource.data.activeMolecule is string || request.resource.data.api is string || request.resource.data.active_salt is string) &&
-        
-        // Expiry date/months provided
-        (request.resource.data.expiry is string || request.resource.data.expiryDate is string || request.resource.data.expiry_date_months is number) &&
+    // 4. Audit Logs Collection (Append-only immutable event stream)
+    match /AuditLogs/{eventId} {
+      allow read: if true;
+      allow create: if isValidAuditLog(request.resource.data);
+      allow update, delete: if false; // Audit logs cannot be tampered with or modified
+    }
 
-        // qrCodeData schema definition: Unique batch matrix string
-        (!('qrCodeData' in request.resource.data) || (request.resource.data.qrCodeData is string && request.resource.data.qrCodeData.size() <= 200)) &&
-
-        // shelfLocation schema definition: Physical shelf location
-        (!('shelfLocation' in request.resource.data) || (request.resource.data.shelfLocation is string && request.resource.data.shelfLocation.size() <= 100)) &&
-        (!('physical_shelf_location' in request.resource.data) || (request.resource.data.physical_shelf_location is string && request.resource.data.physical_shelf_location.size() <= 100));
-
-      // 3. DELETE: Allowed in prototype testing
+    // 5. PharmaInventory (Backward-compatibility collection)
+    match /PharmaInventory/{medicationId} {
+      allow read: if true;
+      allow create, update: if true;
       allow delete: if true;
     }
 
-    // Default deny for all other collections
+    // Default catch-all
     match /{document=**} {
       allow read, write: if false;
     }

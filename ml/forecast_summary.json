@@ -1,0 +1,224 @@
+{
+  "engine": "PharmaTrust Predictive Inventory Forecasting",
+  "algorithm": "Ordinary Least Squares (OLS) Linear Regression",
+  "evaluated_metric": "Mean Absolute Error (MAE)",
+  "portfolio_mae": 2.839,
+  "generated_at": "2026-10-27T13:21:44.466032Z",
+  "total_catalog_evaluated": 5,
+  "sku_forecasts": [
+    {
+      "medicine_id": "MED-AMX-500",
+      "brand_name": "Amoxil (Amoxicillin 500mg)",
+      "metrics": {
+        "mae": 2.852,
+        "r2": 0.66,
+        "train_samples": 72,
+        "test_samples": 18
+      },
+      "coefficients": {
+        "intercept": 27.9247,
+        "weights": [
+          0.1651,
+          0.0095,
+          -9.8687
+        ],
+        "feature_names": [
+          "day_index",
+          "day_of_week",
+          "is_weekend"
+        ]
+      },
+      "forecast": {
+        "next_7_days_units": 284.5,
+        "next_14_days_units": 577.2,
+        "next_30_days_units": 1282.0,
+        "projected_daily_mean": 42.73
+      },
+      "inventory_status": {
+        "current_on_hand": 140,
+        "estimated_days_of_supply": 3.3,
+        "reorder_threshold": 200,
+        "lead_time_days": 5,
+        "risk_level": "CRITICAL_STOCKOUT_RISK",
+        "recommended_action": "Immediate emergency purchase required! Only 3.3 days of supply remaining."
+      }
+    },
+    {
+      "medicine_id": "MED-MET-500",
+      "brand_name": "Glucophage (Metformin 500mg)",
+      "metrics": {
+        "mae": 2.839,
+        "r2": 0.426,
+        "train_samples": 72,
+        "test_samples": 18
+      },
+      "coefficients": {
+        "intercept": 45.1269,
+        "weights": [
+          0.0642,
+          -0.0001,
+          -6.936
+        ],
+        "feature_names": [
+          "day_index",
+          "day_of_week",
+          "is_weekend"
+        ]
+      },
+      "forecast": {
+        "next_7_days_units": 344.2,
+        "next_14_days_units": 691.6,
+        "next_30_days_units": 1501.4,
+        "projected_daily_mean": 50.05
+      },
+      "inventory_status": {
+        "current_on_hand": 720,
+        "estimated_days_of_supply": 14.4,
+        "reorder_threshold": 350,
+        "lead_time_days": 7,
+        "risk_level": "OPTIMAL_STOCK_BUFFER",
+        "recommended_action": "Stock level healthy. 14.4 days of buffer coverage."
+      }
+    },
+    {
+      "medicine_id": "MED-ATV-20",
+      "brand_name": "Lipitor (Atorvastatin 20mg)",
+      "metrics": {
+        "mae": 2.848,
+        "r2": 0.384,
+        "train_samples": 72,
+        "test_samples": 18
+      },
+      "coefficients": {
+        "intercept": 31.8743,
+        "weights": [
+          0.1064,
+          0.0337,
+          -6.5897
+        ],
+        "feature_names": [
+          "day_index",
+          "day_of_week",
+          "is_weekend"
+        ]
+      },
+      "forecast": {
+        "next_7_days_units": 280.7,
+        "next_14_days_units": 566.5,
+        "next_30_days_units": 1243.2,
+        "projected_daily_mean": 41.44
+      },
+      "inventory_status": {
+        "current_on_hand": 180,
+        "estimated_days_of_supply": 4.3,
+        "reorder_threshold": 250,
+        "lead_time_days": 6,
+        "risk_level": "CRITICAL_STOCKOUT_RISK",
+        "recommended_action": "Immediate emergency purchase required! Only 4.3 days of supply remaining."
+      }
+    },
+    {
+      "medicine_id": "MED-OMP-20",
+      "brand_name": "Prilosec (Omeprazole 20mg)",
+      "metrics": {
+        "mae": 2.886,
+        "r2": 0.292,
+        "train_samples": 72,
+        "test_samples": 18
+      },
+      "coefficients": {
+        "intercept": 21.9492,
+        "weights": [
+          0.0364,
+          0.0394,
+          -5.7772
+        ],
+        "feature_names": [
+          "day_index",
+          "day_of_week",
+          "is_weekend"
+        ]
+      },
+      "forecast": {
+        "next_7_days_units": 166.9,
+        "next_14_days_units": 335.6,
+        "next_30_days_units": 731.1,
+        "projected_daily_mean": 24.37
+      },
+      "inventory_status": {
+        "current_on_hand": 310,
+        "estimated_days_of_supply": 12.7,
+        "reorder_threshold": 160,
+        "lead_time_days": 4,
+        "risk_level": "OPTIMAL_STOCK_BUFFER",
+        "recommended_action": "Stock level healthy. 12.7 days of buffer coverage."
+      }
+    },
+    {
+      "medicine_id": "MED-PCM-500",
+      "brand_name": "Panadol (Paracetamol 500mg)",
+      "metrics": {
+        "mae": 2.771,
+        "r2": 0.726,
+        "train_samples": 72,
+        "test_samples": 18
+      },
+      "coefficients": {
+        "intercept": 64.6659,
+        "weights": [
+          0.2394,
+          0.016,
+          9.5791
+        ],
+        "feature_names": [
+          "day_index",
+          "day_of_week",
+          "is_weekend"
+        ]
+      },
+      "forecast": {
+        "next_7_days_units": 629.7,
+        "next_14_days_units": 1271.0,
+        "next_30_days_units": 2775.6,
+        "projected_daily_mean": 92.52
+      },
+      "inventory_status": {
+        "current_on_hand": 250,
+        "estimated_days_of_supply": 2.7,
+        "reorder_threshold": 400,
+        "lead_time_days": 3,
+        "risk_level": "CRITICAL_STOCKOUT_RISK",
+        "recommended_action": "Immediate emergency purchase required! Only 2.7 days of supply remaining."
+      }
+    }
+  ],
+  "stock_risk_alerts": [
+    {
+      "medicine_id": "MED-AMX-500",
+      "brand_name": "Amoxil (Amoxicillin 500mg)",
+      "risk_level": "CRITICAL_STOCKOUT_RISK",
+      "current_stock": 140,
+      "projected_14_day_demand": 577.2,
+      "days_of_supply": 3.3,
+      "recommended_action": "Immediate emergency purchase required! Only 3.3 days of supply remaining."
+    },
+    {
+      "medicine_id": "MED-ATV-20",
+      "brand_name": "Lipitor (Atorvastatin 20mg)",
+      "risk_level": "CRITICAL_STOCKOUT_RISK",
+      "current_stock": 180,
+      "projected_14_day_demand": 566.5,
+      "days_of_supply": 4.3,
+      "recommended_action": "Immediate emergency purchase required! Only 4.3 days of supply remaining."
+    },
+    {
+      "medicine_id": "MED-PCM-500",
+      "brand_name": "Panadol (Paracetamol 500mg)",
+      "risk_level": "CRITICAL_STOCKOUT_RISK",
+      "current_stock": 250,
+      "projected_14_day_demand": 1271.0,
+      "days_of_supply": 2.7,
+      "recommended_action": "Immediate emergency purchase required! Only 2.7 days of supply remaining."
+    }
+  ]
+}

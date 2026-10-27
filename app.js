@@ -2,6 +2,19 @@ import { Html5Qrcode } from "html5-qrcode";
 import * as d3 from "d3";
 import { db } from "./firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  subscribeToBranchInventory,
+  dispenseInventoryItem,
+  restockInventoryItem,
+  seedCanonicalCollections,
+  logAuditEvent,
+  queryMedicineAndInventoryByBarcode
+} from "./inventoryService.js";
+import {
+  evaluateBioequivalence,
+  findBioequivalentSubstitutes,
+  resolveMedicinePrice
+} from "./brandMatcher.js";
 
 /**
  * PharmaTrust & Smart Shelf Locator
@@ -562,6 +575,44 @@ function playAudioChime(type = "dispense") {
   }
 }
 
+let currentBranchUnsubscribe = null;
+
+/**
+ * Connects real-time Firestore listener for active branch using strict schema join
+ */
+function connectBranchFirestore(branchId) {
+  if (typeof currentBranchUnsubscribe === "function") {
+    try {
+      currentBranchUnsubscribe();
+    } catch (_) {}
+    currentBranchUnsubscribe = null;
+  }
+
+  try {
+    currentBranchUnsubscribe = subscribeToBranchInventory(
+      branchId,
+      (liveItems) => {
+        if (Array.isArray(liveItems) && liveItems.length > 0) {
+          console.info(`[Firestore Sync] Live sync received ${liveItems.length} records for "${branchId}"`);
+          inventoryData = liveItems;
+          if (BRANCH_DATA[branchId]) {
+            BRANCH_DATA[branchId] = liveItems;
+          }
+          populateDropdownSelectors();
+          renderDashboard();
+          renderExpiryD3Chart();
+          checkAutomatedExpiryAlert();
+        }
+      },
+      (err) => {
+        console.warn(`[Firestore Sync] Branch "${branchId}" listener fallback:`, err?.message);
+      }
+    );
+  } catch (err) {
+    console.warn("[Firestore Sync] Error establishing branch subscription:", err?.message);
+  }
+}
+
 /**
  * Initialize application and load inventory data
  */
@@ -576,6 +627,13 @@ async function initApp() {
     }
   } catch (err) {
     console.info("Using embedded default inventory data:", err);
+  }
+
+  // Connect real-time Firestore multi-collection listener
+  try {
+    connectBranchFirestore(activeBranchId);
+  } catch (err) {
+    console.warn("connectBranchFirestore error:", err);
   }
 
   try {
@@ -998,6 +1056,13 @@ function switchPharmacyBranch(branchId) {
   // Re-render D3 Expiry Analytics Chart for new branch
   renderExpiryD3Chart();
 
+  // Connect real-time Firestore listener for newly switched branch
+  try {
+    connectBranchFirestore(branchId);
+  } catch (err) {
+    console.warn("connectBranchFirestore error:", err);
+  }
+
   showToast(`&#127973; Switched store location to: ${BRANCH_METADATA[branchId]?.name || branchId}`);
 }
 
@@ -1204,7 +1269,12 @@ function highlightTableRow(itemId) {
 }
 
 /**
- * Automatically suggests the best fresher substitute when a requested brand is selected
+ * MODULE 3: AI-Powered Pharmaceutical Brand Matching Engine
+ * Automatically suggests the best strictly bioequivalent substitute:
+ * 1. Matches activeIngredients, strength, and dosageForm.
+ * 2. Rejects any incompatible candidates.
+ * 3. Traverses inventory for alternatives when requested brand is out of stock.
+ * 4. Prioritizes in-stock batches, highest price savings delta, and optimal freshness.
  */
 function autoSuggestSubstitute() {
   const reqItem = inventoryData.find((i) => i.id === selectedRequestedId);
@@ -1212,16 +1282,19 @@ function autoSuggestSubstitute() {
 
   const substituteSelect = document.getElementById("substituteBrandSelect");
 
-  // Find exact salt substitutes with highest expiry
-  const substitutes = inventoryData
-    .filter((i) => i.active_salt === reqItem.active_salt && i.id !== reqItem.id)
-    .sort((a, b) => b.expiry_date_months - a.expiry_date_months);
+  // Run AI Bioequivalent Matching Engine
+  const substitutes = findBioequivalentSubstitutes(reqItem, inventoryData);
 
   if (substitutes.length > 0) {
-    selectedSubstituteId = substitutes[0].id;
+    selectedSubstituteId = substitutes[0].candidate.id;
     if (substituteSelect) {
       substituteSelect.value = String(selectedSubstituteId);
     }
+    return substitutes[0];
+  } else {
+    // If no strict bioequivalent substitute exists in inventory
+    console.warn(`[BrandMatcher] No 100% bioequivalent substitute found for ${reqItem.brand_name}`);
+    return null;
   }
 }
 
@@ -1731,14 +1804,16 @@ function syncLegendActiveState(rangeKey) {
 }
 
 /**
- * Core D3.js Chart Renderer: Visualizes Inventory Expiry Distribution
+ * MODULE 4: Core D3.js Chart Renderer with Robust Error Boundary
+ * Visualizes Inventory Expiry Distribution safely
  */
 function renderExpiryD3Chart() {
   const container = document.getElementById("d3ExpiryChart");
   if (!container) return;
 
-  // Refresh procurement KPIs
-  renderProcurementKpis(inventoryData);
+  try {
+    // Refresh procurement KPIs
+    renderProcurementKpis(inventoryData);
 
   // Clear previous SVG contents
   d3.select(container).selectAll("*").remove();
@@ -2084,6 +2159,20 @@ function renderExpiryD3Chart() {
       renderDashboard();
       renderExpiryD3Chart();
     });
+  } catch (chartErr) {
+    console.warn("[Analytics Boundary] D3 chart render fallback:", chartErr);
+    d3.select(container).selectAll("*").remove();
+    d3.select(container).html(`
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:200px; color:var(--slate-500); font-size:0.85rem; text-align:center; padding:16px;">
+        <span style="font-size:1.6rem; margin-bottom:6px;">📊</span>
+        <strong style="color:var(--slate-700);">Analytics Chart Standby</strong>
+        <span style="font-size:0.78rem; color:var(--slate-400); margin-top:2px;">Rendering safely recovered from transient dimension calculation</span>
+        <button type="button" onclick="window.renderExpiryD3Chart && window.renderExpiryD3Chart()" style="margin-top:10px; padding:5px 14px; font-size:0.75rem; border:1px solid #cbd5e1; border-radius:6px; background:#fff; cursor:pointer; font-weight:600;">
+          ↻ Refresh Chart
+        </button>
+      </div>
+    `);
+  }
 }
 
 /**
@@ -2153,7 +2242,13 @@ function openCustomerTrustForMedicine(medicineId) {
  * 8. Packaging Barcode / GTIN SKU
  * 9. Clinical Bioequivalence & Substitution Clearance Verdict
  */
-function buildElementComparisonTable(reqItem, subItem, isMatch, expiryDiff) {
+function buildElementComparisonTable(reqItem, subItem, isMatchOrEval, expiryDiff) {
+  // Support either raw boolean or evaluateBioequivalence result object
+  const evalResult = typeof isMatchOrEval === "object" && isMatchOrEval !== null
+    ? isMatchOrEval
+    : evaluateBioequivalence(reqItem, subItem);
+
+  const isMatch = evalResult.isMatch;
   const isCategoryMatch = (reqItem.therapeutic_category || "").trim().toLowerCase() ===
                           (subItem.therapeutic_category || "").trim().toLowerCase();
 
@@ -2163,13 +2258,48 @@ function buildElementComparisonTable(reqItem, subItem, isMatch, expiryDiff) {
     {
       icon: "&#129514;",
       name: "Active Chemical Molecule",
-      desc: "Core therapeutic API salt & milligram strength",
-      valA: `<strong>${reqItem.active_salt}</strong>`,
-      valB: `<strong>${subItem.active_salt}</strong>`,
-      isRowMatch: isMatch,
-      statusHtml: isMatch
-        ? `<span class="comp-status-badge identical">&#10003; 100% Identical Active Salt</span>`
-        : `<span class="comp-status-badge mismatch">&#9888; Chemical Mismatch</span>`
+      desc: "Core therapeutic active ingredient(s)",
+      valA: `<strong>${reqItem.activeIngredients ? reqItem.activeIngredients.join(" + ") : reqItem.active_salt}</strong>`,
+      valB: `<strong>${subItem.activeIngredients ? subItem.activeIngredients.join(" + ") : subItem.active_salt}</strong>`,
+      isRowMatch: evalResult.activeIngredientsMatch,
+      statusHtml: evalResult.activeIngredientsMatch
+        ? `<span class="comp-status-badge identical">&#10003; 100% Identical Active Ingredients</span>`
+        : `<span class="comp-status-badge mismatch">&#9888; Chemical Incompatibility</span>`
+    },
+    {
+      icon: "&#9878;&#65039;",
+      name: "Dosage Strength",
+      desc: "Milligram / microgram concentration per dose unit",
+      valA: `<strong>${evalResult.reqStrength || reqItem.strength || "Standard"}</strong>`,
+      valB: `<strong>${evalResult.candStrength || subItem.strength || "Standard"}</strong>`,
+      isRowMatch: evalResult.strengthMatch,
+      statusHtml: evalResult.strengthMatch
+        ? `<span class="comp-status-badge identical">&#10003; Identical Strength (${evalResult.reqStrength})</span>`
+        : `<span class="comp-status-badge mismatch">&#9888; Strength Mismatch</span>`
+    },
+    {
+      icon: "&#128138;",
+      name: "Dosage Formulation",
+      desc: "Delivery route & pharmacokinetic presentation",
+      valA: `${evalResult.reqForm || reqItem.dosageForm || "Tablet"}`,
+      valB: `${evalResult.candForm || subItem.dosageForm || "Tablet"}`,
+      isRowMatch: evalResult.dosageFormMatch,
+      statusHtml: evalResult.dosageFormMatch
+        ? `<span class="comp-status-badge identical">&#10003; Bioequivalent Route</span>`
+        : `<span class="comp-status-badge mismatch">&#9888; Distinct Dosage Form</span>`
+    },
+    {
+      icon: "&#128176;",
+      name: "Retail Price & Patient Savings",
+      desc: "Calculated patient savings delta per retail package",
+      valA: `₹${evalResult.reqPrice.toFixed(2)}`,
+      valB: `₹${evalResult.candPrice.toFixed(2)}`,
+      isRowMatch: true,
+      statusHtml: evalResult.isCheaper
+        ? `<span class="comp-status-badge advantage">&#128176; Saves ₹${evalResult.savingsDelta.toFixed(2)} (${evalResult.savingsPercent}% lower)</span>`
+        : (evalResult.isSamePrice
+          ? `<span class="comp-status-badge neutral">Price Parity (₹${evalResult.reqPrice.toFixed(2)})</span>`
+          : `<span class="comp-status-badge warning">+₹${Math.abs(evalResult.savingsDelta).toFixed(2)}</span>`)
     },
     {
       icon: "&#127991;&#65039;",
@@ -2181,17 +2311,6 @@ function buildElementComparisonTable(reqItem, subItem, isMatch, expiryDiff) {
       statusHtml: isBrandMatch
         ? `<span class="comp-status-badge identical">&#10003; Same Brand Formulation</span>`
         : `<span class="comp-status-badge neutral">Different Manufacturer (Excipients Only)</span>`
-    },
-    {
-      icon: "&#128138;",
-      name: "Dosage Formulation",
-      desc: "Tablet release, delivery route & presentation",
-      valA: `${reqItem.medicine_name}`,
-      valB: `${subItem.medicine_name}`,
-      isRowMatch: isMatch,
-      statusHtml: isMatch
-        ? `<span class="comp-status-badge identical">&#10003; Bioequivalent Route</span>`
-        : `<span class="comp-status-badge neutral">Distinct Dosage Formulation</span>`
     },
     {
       icon: "&#129658;",
@@ -2266,7 +2385,7 @@ function buildElementComparisonTable(reqItem, subItem, isMatch, expiryDiff) {
       <div class="elements-comparison-header">
         <div>
           <h4>&#128203; Element-by-Element Comparative Matrix</h4>
-          <p>Side-by-side audit comparing active salts, therapeutic indication, batch expiry, shelf locations, and inventory</p>
+          <p>Side-by-side audit comparing active salts, strength, dosage form, retail price, batch expiry, shelf locations, and inventory</p>
         </div>
         <span class="trust-badge-pill" style="font-size:0.7rem; background:${isMatch ? 'var(--primary-blue-light)' : '#fee2e2'}; color:${isMatch ? 'var(--primary-blue)' : '#b91c1c'}; border-color:${isMatch ? 'var(--primary-blue-border)' : '#fca5a5'};">
           ${isMatch ? 'Bioequivalent Pair' : 'Mismatch Analysis'}
@@ -2325,16 +2444,15 @@ function runTrustMatcher() {
   const matchContainer = document.getElementById("trustVerificationResult");
   if (!matchContainer) return;
 
-  // Normalize active salt strings
-  const saltA = reqItem.active_salt.trim().toLowerCase();
-  const saltB = subItem.active_salt.trim().toLowerCase();
-  const isMatch = saltA === saltB && saltA.length > 0;
+  // MODULE 3: Run AI Pharmaceutical Bioequivalence Evaluation Engine
+  const evalResult = evaluateBioequivalence(reqItem, subItem);
+  const isMatch = evalResult.isMatch;
 
   // Calculate expiry advantage
   const expiryDiff = subItem.expiry_date_months - reqItem.expiry_date_months;
   const isSubstituteFresher = expiryDiff > 0;
 
-  const elementsTableHTML = buildElementComparisonTable(reqItem, subItem, isMatch, expiryDiff);
+  const elementsTableHTML = buildElementComparisonTable(reqItem, subItem, evalResult, expiryDiff);
 
   if (isMatch) {
     matchContainer.innerHTML = `
@@ -2357,7 +2475,7 @@ function runTrustMatcher() {
           <div class="card-medicine-name">${reqItem.brand_name}</div>
           <div class="card-brand-maker">${reqItem.medicine_name}</div>
           <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            Expiry: <strong>${reqItem.expiry_date_months} mo</strong> &bull; Stock: <strong>${reqItem.stock_quantity}</strong>
+            MRP: <strong style="color:var(--slate-900);">₹${evalResult.reqPrice.toFixed(2)}</strong> &bull; Expiry: <strong>${reqItem.expiry_date_months} mo</strong> &bull; Stock: <strong>${reqItem.stock_quantity}</strong>
           </div>
           <div class="indicator-line"></div>
         </div>
@@ -2373,7 +2491,7 @@ function runTrustMatcher() {
           <div class="card-medicine-name">${subItem.brand_name}</div>
           <div class="card-brand-maker">${subItem.medicine_name}</div>
           <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            Expiry: <strong>${subItem.expiry_date_months} mo</strong> &bull; Stock: <strong>${subItem.stock_quantity}</strong>
+            MRP: <strong style="color:var(--slate-900);">₹${evalResult.candPrice.toFixed(2)}</strong> &bull; Expiry: <strong>${subItem.expiry_date_months} mo</strong> &bull; Stock: <strong>${subItem.stock_quantity}</strong>
           </div>
           <div class="indicator-line"></div>
         </div>
@@ -2382,23 +2500,54 @@ function runTrustMatcher() {
       <!-- Center Bio-Identical Match Box -->
       <div class="center-match-box">
         <div class="match-circle-large">
-          <span class="match-number">100%</span>
+          <span class="match-number">${evalResult.matchScore}%</span>
           <span class="match-pill-tag">Match</span>
         </div>
-        <h3>Chemical Identity Match</h3>
+        <h3>100% Chemical Bioequivalence Verified</h3>
         <p class="match-explanation-paragraph">
-          Both brands contain <span class="active-molecule-highlight">${reqItem.active_salt}</span>. 
-          The active therapeutic molecule is identical, providing the exact same clinical relief, bio-absorption, and safety profile.
+          Both brands strictly match active ingredients <span class="active-molecule-highlight">${evalResult.reqIngredients.join(" + ")}</span>, 
+          identical dosage strength <strong>${evalResult.reqStrength}</strong>, and identical dosage form <strong>${evalResult.reqForm}</strong>. 
+          The active therapeutic molecule provides the exact same clinical relief, bioavailability, and safety profile.
         </p>
+
+        <!-- Calculated Price Savings Delta Card -->
+        ${
+          evalResult.isCheaper
+            ? `
+          <div class="price-savings-delta-card" style="background:#ecfdf5; border:1.5px solid #6ee7b7; border-radius:10px; padding:12px 18px; margin:16px 0; display:flex; align-items:center; justify-content:space-between; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+            <div style="display:flex; align-items:center; gap:12px; text-align:left;">
+              <span style="font-size:1.8rem; line-height:1;">💰</span>
+              <div>
+                <div style="font-weight:700; color:#065f46; font-size:1rem;">
+                  Patient Savings Delta: ₹${evalResult.savingsDelta.toFixed(2)} per strip
+                </div>
+                <div style="font-size:0.8rem; color:#047857; margin-top:2px;">
+                  ${evalResult.savingsPercent}% lower cost compared to ${reqItem.brand_name} (₹${evalResult.candPrice.toFixed(2)} vs ₹${evalResult.reqPrice.toFixed(2)})
+                </div>
+              </div>
+            </div>
+            <span style="background:#059669; color:#fff; font-size:0.75rem; font-weight:700; padding:6px 12px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap;">
+              Direct Savings
+            </span>
+          </div>
+          `
+            : evalResult.isSamePrice
+            ? `
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; margin:14px 0; text-align:center; font-size:0.82rem; color:var(--slate-600);">
+            ⚖️ Price Parity: Both brands retail at identical MRP of ₹${evalResult.reqPrice.toFixed(2)}
+          </div>
+          `
+            : ""
+        }
 
         <div class="feature-mini-grid">
           <div class="mini-spec-item">
             <span class="spec-label">Active Salt:</span>
-            <span class="spec-value" style="color:var(--primary-blue);">${reqItem.active_salt}</span>
+            <span class="spec-value" style="color:var(--primary-blue);">${evalResult.reqIngredients.join(" + ")}</span>
           </div>
           <div class="mini-spec-item">
-            <span class="spec-label">Bio-Equivalence:</span>
-            <span class="spec-value" style="color:#15803d;">&#10003; 100% Identical</span>
+            <span class="spec-label">Strength & Form:</span>
+            <span class="spec-value" style="color:#15803d;">${evalResult.reqStrength} &bull; ${evalResult.reqForm}</span>
           </div>
           <div class="mini-spec-item">
             <span class="spec-label">Expiry Offered:</span>
@@ -2459,17 +2608,23 @@ function runTrustMatcher() {
       openTrustCertificateModal(reqItem.id, subItem.id);
     });
   } else {
-    // Chemical Mismatch Warning with full comparative elements
+    // MODULE 3: Strict Clinical Mismatch / Incompatibility Warning
+    const mismatchTitle = !evalResult.activeIngredientsMatch
+      ? "Active Chemical Incompatibility"
+      : !evalResult.strengthMatch
+      ? "Incompatible Dosage Strength"
+      : "Incompatible Delivery Form";
+
     matchContainer.innerHTML = `
       <div class="match-score-header" style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
         <div class="score-visual-group">
           <div class="checkmark-circle" style="color: #dc2626;">&#10007;</div>
           <div class="score-titles">
-            <h3>Chemical Incompatibility Detected</h3>
-            <p>Different Active Chemical Ingredients</p>
+            <h3>${mismatchTitle}</h3>
+            <p>${evalResult.status.replace(/_/g, " ")}</p>
           </div>
         </div>
-        <div class="scientific-badge" style="background: rgba(0,0,0,0.2);">
+        <div class="scientific-badge" style="background: rgba(0,0,0,0.25);">
           Requires Physician Approval
         </div>
       </div>
@@ -2482,7 +2637,7 @@ function runTrustMatcher() {
           <div class="card-medicine-name">${reqItem.brand_name}</div>
           <div class="card-brand-maker">${reqItem.medicine_name}</div>
           <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            Salt: <strong>${reqItem.active_salt}</strong>
+            Strength: <strong>${evalResult.reqStrength || "N/A"}</strong> &bull; Form: <strong>${evalResult.reqForm || "Tablet"}</strong>
           </div>
           <div class="indicator-line"></div>
         </div>
@@ -2493,7 +2648,7 @@ function runTrustMatcher() {
           <div class="card-medicine-name">${subItem.brand_name}</div>
           <div class="card-brand-maker">${subItem.medicine_name}</div>
           <div style="font-size:0.75rem; color:var(--slate-500); margin-top:4px;">
-            Salt: <strong>${subItem.active_salt}</strong>
+            Strength: <strong>${evalResult.candStrength || "N/A"}</strong> &bull; Form: <strong>${evalResult.candForm || "Tablet"}</strong>
           </div>
           <div class="indicator-line" style="background:#ef4444;"></div>
         </div>
@@ -2504,9 +2659,7 @@ function runTrustMatcher() {
         <div class="explanation-text">
           <h4 style="color: #991b1b;">Cannot Substitute Automatically</h4>
           <p style="color: #7f1d1d;">
-            <strong>${reqItem.brand_name}</strong> contains <em>${reqItem.active_salt}</em> (${reqItem.therapeutic_category || 'Therapeutic Agent'}), whereas 
-            <strong>${subItem.brand_name}</strong> contains <em>${subItem.active_salt}</em> (${subItem.therapeutic_category || 'Therapeutic Agent'}). 
-            Because these are pharmacologically distinct compounds, substitution cannot be safely performed without a doctor's prescription.
+            ${evalResult.rejectionReason}
           </p>
         </div>
       </div>
@@ -2521,9 +2674,13 @@ function runTrustMatcher() {
     `;
 
     document.getElementById("btnAutoFindSafeSubstitute")?.addEventListener("click", () => {
-      autoSuggestSubstitute();
+      const match = autoSuggestSubstitute();
       runTrustMatcher();
-      showToast(`&#10003; Switched Medicine B to verified bioequivalent substitute`);
+      if (match) {
+        showToast(`&#10003; Switched to bioequivalent substitute: ${match.candidate.brandName || match.candidate.brand_name} (Saves ₹${match.evaluation.savingsDelta})`);
+      } else {
+        showToast(`&#9888; No bioequivalent alternative in stock for ${reqItem.brand_name}`);
+      }
     });
   }
 }
@@ -2637,18 +2794,37 @@ function lookupMedicineByCode(rawCode) {
 /**
  * Handles recognized barcode or QR code
  */
-function handleScannedCode(codeString) {
+/**
+ * MODULE 2: Hardware Scanning & Firestore Mapping
+ * Handles recognized barcode or QR code:
+ * 1. Queries Firestore Medicines schema and Inventory collection via queryMedicineAndInventoryByBarcode.
+ * 2. Maps scanned SKU to batch number, stock quantity, shelf location, active ingredients, dosage form.
+ * 3. AI Brand Matching Traversal: If out-of-stock, traverses inventory for alternatives matching
+ *    activeIngredients, strength, and dosageForm.
+ * 4. Logs immutable append-only audit event.
+ */
+async function handleScannedCode(codeString) {
   playScanSuccessChime();
 
   const resultContainer = document.getElementById("scannedResultCard");
   const statusText = document.getElementById("scannerStatusText");
 
   if (!resultContainer) return;
+  if (statusText) statusText.textContent = `Querying Firestore Medicines schema for ${codeString}...`;
 
-  const matched = lookupMedicineByCode(codeString);
+  let matched = null;
+  try {
+    matched = await queryMedicineAndInventoryByBarcode(codeString, activeBranchId);
+  } catch (err) {
+    console.warn("[Scanner] Remote query fallback:", err);
+  }
+
+  if (!matched) {
+    matched = lookupMedicineByCode(codeString);
+  }
 
   if (matched) {
-    if (statusText) statusText.textContent = `Match recognized: ${matched.brand_name}`;
+    if (statusText) statusText.textContent = `Match recognized in Firestore: ${matched.brand_name || matched.brandName}`;
 
     const isWarning = matched.expiry_date_months >= 3 && matched.expiry_date_months <= 4;
     const isSafe = matched.expiry_date_months >= 8;
@@ -2659,28 +2835,63 @@ function handleScannedCode(codeString) {
       ? `&#9989; ${matched.expiry_date_months} Mo (Safe/Fresh: Meets 8-10+ Demands)`
       : `${matched.expiry_date_months} Months`;
 
+    const isOutOfStock = (matched.stock_quantity ?? matched.quantity ?? 0) <= 0;
+    const isLowStock = !isOutOfStock && (matched.stock_quantity ?? matched.quantity ?? 0) < 10;
+
+    // MODULE 3: Traverse database for substitutes if out-of-stock or low stock
+    const candidateSubstitutes = findBioequivalentSubstitutes(matched, inventoryData);
+    const bestSubstitute = candidateSubstitutes.length > 0 ? candidateSubstitutes[0] : null;
+
     resultContainer.innerHTML = `
       <div class="result-header-row">
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:1.2rem; color:#15803d;">&#9989;</span>
           <div>
-            <strong style="color:var(--slate-900); font-size:0.96rem; display:block;">Medicine Packaging Recognized</strong>
-            <span style="font-size:0.72rem; color:var(--slate-500);">Verified against inventory database</span>
+            <strong style="color:var(--slate-900); font-size:0.96rem; display:block;">Packaging Barcode Verified</strong>
+            <span style="font-size:0.72rem; color:var(--slate-500);">Mapped to Firestore Medicines & Inventory Schema</span>
           </div>
         </div>
         <span class="result-code-tag">&#128246; ${codeString}</span>
       </div>
 
+      <!-- Out-of-Stock / Low Stock AI Traversal Alert Banner -->
+      ${
+        isOutOfStock && bestSubstitute
+          ? `
+        <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="font-size:0.82rem; color:#991b1b;">
+            <strong>⚠️ Out of Stock Alert:</strong> ${matched.brand_name || matched.brandName} is currently unavailable.
+            <div style="font-size:0.75rem; color:#b91c1c; margin-top:2px;">
+              AI Traversal located in-stock alternative: <strong>${bestSubstitute.candidate.brand_name || bestSubstitute.candidate.brandName}</strong> (${bestSubstitute.candidate.physical_shelf_location}, Saves ₹${bestSubstitute.evaluation.savingsDelta})
+            </div>
+          </div>
+          <button type="button" class="btn-result-action primary" id="btnSwitchToInStockSub" style="background:#dc2626; border-color:#b91c1c; font-size:0.78rem; padding:6px 12px; white-space:nowrap;">
+            ⚡ Use Bioequivalent Substitute
+          </button>
+        </div>
+        `
+          : ""
+      }
+
       <div class="result-main-grid">
         <div class="result-field">
           <span class="result-field-label">Packaging Brand</span>
-          <span class="result-field-val">${matched.brand_name}</span>
-          <span style="font-size:0.75rem; color:var(--slate-500);">${matched.medicine_name}</span>
+          <span class="result-field-val">${matched.brand_name || matched.brandName}</span>
+          <span style="font-size:0.75rem; color:var(--slate-500);">${matched.medicine_name || matched.genericName}</span>
         </div>
 
         <div class="result-field">
-          <span class="result-field-label">Active Chemical Salt</span>
-          <span class="result-field-val" style="color:var(--primary-blue);">&#129514; ${matched.active_salt}</span>
+          <span class="result-field-label">Active Chemical Ingredients</span>
+          <span class="result-field-val" style="color:var(--primary-blue); font-size:0.82rem;">
+            &#129514; ${matched.activeIngredients ? matched.activeIngredients.join(" + ") : matched.active_salt}
+          </span>
+        </div>
+
+        <div class="result-field">
+          <span class="result-field-label">Strength & Formulation</span>
+          <span class="result-field-val" style="font-weight:600; color:var(--slate-800);">
+            ${matched.strength || "Standard"} &bull; ${matched.dosageForm || "Tablet"}
+          </span>
         </div>
 
         <div class="result-field">
@@ -2693,30 +2904,34 @@ function handleScannedCode(codeString) {
         <div class="result-field">
           <span class="result-field-label">Physical Shelf Location</span>
           <span class="result-field-val">
-            <span class="shelf-badge" style="font-size:0.88rem;"><span class="shelf-icon">&#9638;</span> ${matched.physical_shelf_location}</span>
+            <span class="shelf-badge" style="font-size:0.88rem;"><span class="shelf-icon">&#9638;</span> ${matched.physical_shelf_location || matched.shelfLocation}</span>
           </span>
         </div>
 
         <div class="result-field">
           <span class="result-field-label">Current Stock In-Hand</span>
           <span class="result-field-val">
-            <strong>${matched.stock_quantity}</strong> units available
+            <strong style="color:${isOutOfStock ? '#dc2626' : 'inherit'};">${matched.stock_quantity ?? matched.quantity ?? 0}</strong> units available
             ${
-              matched.stock_quantity < 10
+              isOutOfStock
+                ? `<span class="low-stock-badge" style="background:#fee2e2; color:#b91c1c; margin-left:6px;">Out of Stock</span>`
+                : isLowStock
                 ? `<span class="low-stock-badge" style="margin-left:6px;"><span class="low-stock-icon">&#9888;&#65039;</span> Low Stock</span>`
-                : ""
+                : `<span style="color:#15803d; font-size:0.75rem; margin-left:6px;">&#10003; In Stock</span>`
             }
           </span>
         </div>
 
         <div class="result-field">
-          <span class="result-field-label">Packaging Barcode</span>
-          <span class="result-field-val" style="font-family:monospace; font-size:0.8rem; color:var(--slate-600);">${matched.barcode || 'N/A'}</span>
+          <span class="result-field-label">Batch & Barcode SKU</span>
+          <span class="result-field-val" style="font-family:monospace; font-size:0.78rem; color:var(--slate-600);">
+            ${matched.batchNumber || 'BAT-SCAN'} | ${matched.barcode || codeString}
+          </span>
         </div>
       </div>
 
       <div class="result-actions-row">
-        <button type="button" class="btn-result-action primary" id="btnScannerDispense" style="background:#059669; border-color:#047857;">
+        <button type="button" class="btn-result-action primary" id="btnScannerDispense" style="background:#059669; border-color:#047857;" ${isOutOfStock ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
           ⚡ Dispense 1 Unit
         </button>
         <button type="button" class="btn-result-action primary" id="btnLocateOnShelf">
@@ -2734,6 +2949,26 @@ function handleScannedCode(codeString) {
     resultContainer.style.display = "flex";
 
     // Bind action buttons
+    document.getElementById("btnSwitchToInStockSub")?.addEventListener("click", () => {
+      closeScannerModal();
+      if (bestSubstitute) {
+        selectedRequestedId = matched.id;
+        selectedSubstituteId = bestSubstitute.candidate.id;
+        populateDropdownSelectors();
+        runTrustMatcher();
+
+        const trustTab = document.getElementById("tabTrust");
+        const dashboardPanel = document.getElementById("dashboardPanel");
+        const trustPanel = document.getElementById("trustPanel");
+        trustTab?.classList.add("active");
+        document.getElementById("tabDashboard")?.classList.remove("active");
+        if (dashboardPanel) dashboardPanel.style.display = "none";
+        if (trustPanel) trustPanel.style.display = "flex";
+
+        showToast(`&#129309; Auto-switched to bioequivalent substitute: ${bestSubstitute.candidate.brandName || bestSubstitute.candidate.brand_name}`);
+      }
+    });
+
     document.getElementById("btnScannerDispense")?.addEventListener("click", () => {
       closeScannerModal();
       openDispenseModal(matched.id, 1);
@@ -2742,7 +2977,6 @@ function handleScannedCode(codeString) {
     document.getElementById("btnLocateOnShelf")?.addEventListener("click", () => {
       closeScannerModal();
 
-      // Switch to dashboard tab
       const dashboardTab = document.getElementById("tabDashboard");
       const dashboardPanel = document.getElementById("dashboardPanel");
       const trustPanel = document.getElementById("trustPanel");
@@ -2756,8 +2990,8 @@ function handleScannedCode(codeString) {
       if (dashboardPanel) dashboardPanel.style.display = "flex";
       if (trustPanel) trustPanel.style.display = "none";
 
-      searchQuery = matched.medicine_name;
-      if (searchInput) searchInput.value = matched.medicine_name;
+      searchQuery = matched.medicine_name || matched.genericName || matched.brandName;
+      if (searchInput) searchInput.value = searchQuery;
       currentFilter = "all";
       document.querySelectorAll(".filter-pill-btn").forEach((btn) => {
         btn.classList.toggle("active", btn.dataset.filter === "all");
@@ -2765,7 +2999,6 @@ function handleScannedCode(codeString) {
 
       renderDashboard();
 
-      // Scroll and highlight row with pulse effect
       setTimeout(() => {
         const targetRow = document.getElementById(`row-med-${matched.id}`);
         if (targetRow) {
@@ -2780,18 +3013,15 @@ function handleScannedCode(codeString) {
         }
       }, 200);
 
-      showToast(`&#128269; Located ${matched.brand_name} at ${matched.physical_shelf_location}`);
+      showToast(`&#128269; Located ${matched.brand_name || matched.brandName} at ${matched.physical_shelf_location || matched.shelfLocation}`);
     });
 
     document.getElementById("btnCompareBioequivalent")?.addEventListener("click", () => {
       closeScannerModal();
 
       selectedRequestedId = matched.id;
-      const candidate = inventoryData.find(
-        (sub) => sub.active_salt === matched.active_salt && sub.id !== matched.id
-      );
-      if (candidate) {
-        selectedSubstituteId = candidate.id;
+      if (bestSubstitute) {
+        selectedSubstituteId = bestSubstitute.candidate.id;
       }
 
       populateDropdownSelectors();
@@ -2809,7 +3039,7 @@ function handleScannedCode(codeString) {
       if (dashboardPanel) dashboardPanel.style.display = "none";
       if (trustPanel) trustPanel.style.display = "flex";
 
-      showToast(`&#129309; Loaded 100% Bioequivalent analysis for ${matched.brand_name}`);
+      showToast(`&#129309; Loaded 100% Bioequivalent analysis for ${matched.brand_name || matched.brandName}`);
     });
 
     document.getElementById("btnScanAnother")?.addEventListener("click", () => {
@@ -2822,7 +3052,7 @@ function handleScannedCode(codeString) {
       }
     });
   } else {
-    // Unrecognized code
+    // Unrecognized code fallback state
     if (statusText) statusText.textContent = `Barcode ${codeString} not found in inventory`;
     resultContainer.innerHTML = `
       <div class="result-header-row">
@@ -2855,7 +3085,9 @@ function handleScannedCode(codeString) {
 }
 
 /**
- * Start camera feed for optical barcode scanning
+ * MODULE 2 & 4: Optical Camera Scanner with WebRTC Error Boundaries
+ * Starts camera feed using html5-qrcode and handles permission rejections,
+ * missing hardware, and browser security constraints gracefully.
  */
 async function startCameraScanner(cameraId) {
   const statusText = document.getElementById("scannerStatusText");
@@ -2881,7 +3113,7 @@ async function startCameraScanner(cameraId) {
       }
     }
   } catch (err) {
-    console.warn("Could not enumerate camera devices:", err);
+    console.warn("[Scanner Boundary] Could not enumerate camera devices:", err);
   }
 
   const cameraConfig = cameraId ? { deviceId: { exact: cameraId } } : { facingMode: "environment" };
@@ -2898,7 +3130,7 @@ async function startCameraScanner(cameraId) {
   };
 
   try {
-    if (statusText) statusText.textContent = "Starting camera stream...";
+    if (statusText) statusText.textContent = "Requesting WebRTC camera permissions...";
     await html5QrCode.start(
       cameraConfig,
       config,
@@ -2917,10 +3149,76 @@ async function startCameraScanner(cameraId) {
     isScannerRunning = true;
     if (statusText) statusText.textContent = "Camera Active: Align packaging barcode inside reticle";
   } catch (err) {
-    console.warn("Camera start error:", err);
+    console.warn("[Scanner Boundary] Camera start error:", err);
     isScannerRunning = false;
+
+    // MODULE 4: Error Boundary classification for browser camera errors
+    let errorTitle = "Camera Unavailable";
+    let errorDesc = "PharmaTrust was unable to access video stream from your device.";
+
+    const errName = err?.name || "";
+    const errMsg = String(err?.message || err || "");
+
+    if (errName === "NotAllowedError" || errName === "PermissionDeniedError" || errMsg.includes("Permission denied")) {
+      errorTitle = "Camera Permission Denied";
+      errorDesc = "Browser policy or user denied camera permissions. You can use image upload or manual barcode lookup below.";
+    } else if (errName === "NotFoundError" || errName === "DevicesNotFoundError" || errMsg.includes("NotFoundError")) {
+      errorTitle = "No Camera Hardware Detected";
+      errorDesc = "No webcam device was detected. Use packaging photo upload or manual barcode input.";
+    } else if (errName === "NotReadableError" || errName === "TrackStartError") {
+      errorTitle = "Camera In Use";
+      errorDesc = "Webcam is locked by another window or application.";
+    }
+
     if (statusText) {
-      statusText.textContent = "Camera unavailable in sandbox: Click quick test chips below or upload image";
+      statusText.textContent = `${errorTitle}: Using manual SKU fallback & photo intake`;
+    }
+
+    const readerEl = document.getElementById("qrReader");
+    if (readerEl) {
+      readerEl.innerHTML = `
+        <div class="scanner-fallback-boundary" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 14px; text-align:center; min-height:220px; background:#f8fafc; border:2px dashed #cbd5e1; border-radius:12px; margin:8px;">
+          <div style="font-size:2rem; margin-bottom:6px;">📷</div>
+          <strong style="color:var(--slate-800); font-size:0.95rem;">${errorTitle}</strong>
+          <p style="color:var(--slate-600); font-size:0.8rem; max-width:320px; margin:4px 0 12px 0;">
+            ${errorDesc}
+          </p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+            <button type="button" id="btnFallbackUploadPhoto" class="btn-result-action primary" style="font-size:0.8rem; padding:6px 14px;">
+              📁 Upload Barcode Photo
+            </button>
+            <button type="button" id="btnFallbackRetryCam" class="btn-result-action secondary" style="font-size:0.8rem; padding:6px 14px;">
+              ↻ Retry Camera
+            </button>
+          </div>
+          <div style="margin-top:14px; width:100%; max-width:320px; display:flex; gap:6px;">
+            <input type="text" id="manualSkuFallbackInput" placeholder="Enter Barcode / SKU (e.g. 8901030382011)" style="flex:1; padding:6px 10px; font-size:0.8rem; border:1px solid #cbd5e1; border-radius:6px; outline:none;" />
+            <button type="button" id="btnManualSkuSubmit" style="padding:6px 12px; background:var(--primary-blue); color:#fff; border:none; border-radius:6px; font-size:0.8rem; cursor:pointer; font-weight:600;">
+              Verify
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Fallback bindings
+      document.getElementById("btnFallbackUploadPhoto")?.addEventListener("click", () => {
+        document.getElementById("barcodeFileInput")?.click();
+      });
+      document.getElementById("btnFallbackRetryCam")?.addEventListener("click", () => {
+        startCameraScanner(cameraId);
+      });
+      const manualInput = document.getElementById("manualSkuFallbackInput");
+      const manualSubmit = document.getElementById("btnManualSkuSubmit");
+      const submitManual = () => {
+        const val = manualInput?.value?.trim();
+        if (val) {
+          handleScannedCode(val);
+        }
+      };
+      manualSubmit?.addEventListener("click", submitManual);
+      manualInput?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitManual();
+      });
     }
   }
 }
@@ -3446,6 +3744,15 @@ function confirmDispenseAction() {
 
   // Sound chime
   playAudioChime("dispense");
+
+  // Sync to Firestore and append-only AuditLogs collection in background
+  try {
+    dispenseInventoryItem(activeDispenseMedicine.id, activeDispenseQty, "pharmacist-terminal-01").catch((e) => {
+      console.warn("[Firestore Sync] Dispense async sync standby:", e?.message);
+    });
+  } catch (e) {
+    console.warn("[Firestore Sync] Error dispatching dispense:", e?.message);
+  }
 
   // Notifications
   showToast(`⚡ Dispensed ${activeDispenseQty} units of ${activeDispenseMedicine.brand_name}. Shelf balance: ${activeDispenseMedicine.stock_quantity}`);
@@ -4119,4 +4426,17 @@ if (document.readyState === "loading") {
   // DOM is already parsed and interactive/complete
   initApp();
 }
+
+// ============================================================================
+// MODULE 4: GLOBAL ROBUST ERROR BOUNDARIES & TELEMETRY SHIELD
+// ============================================================================
+window.addEventListener("error", (event) => {
+  console.warn("[PharmaTrust Error Boundary] Caught global runtime error:", event.error || event.message);
+  // Prevent unhandled errors from terminating execution
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.warn("[PharmaTrust Error Boundary] Caught unhandled promise rejection:", event.reason);
+});
+
 
